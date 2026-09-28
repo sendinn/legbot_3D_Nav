@@ -15,8 +15,8 @@
 
 #include <memory>
 
-#include <gz/sim/System.hh>
-namespace sim = gz::sim;
+#include <ignition/gazebo/System.hh>
+namespace sim = ignition::gazebo;
 
 namespace gz_quadruped_hardware {
     // Forward declarations.

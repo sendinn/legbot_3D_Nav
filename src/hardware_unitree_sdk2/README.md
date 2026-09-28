@@ -28,9 +28,7 @@ Required hardware interfaces:
 
 ## 2. Build
 
-Tested environment:
-* Ubuntu 24.04
-    * ROS2 Jazzy
+Target environment for this branch:
 * Ubuntu 22.04
     * ROS2 Humble
 

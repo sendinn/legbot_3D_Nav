@@ -15,8 +15,8 @@
 
 #include "gz_quadruped_hardware/gz_system.hpp"
 
-#include <gz/msgs/imu.pb.h>
-#include <gz/msgs/wrench.pb.h>
+#include <ignition/msgs/imu.pb.h>
+#include <ignition/msgs/wrench.pb.h>
 
 #include <limits>
 #include <map>
@@ -25,27 +25,27 @@
 #include <utility>
 #include <vector>
 
-#include <gz/physics/Geometry.hh>
-#include <gz/sim/components/AngularVelocity.hh>
-#include <gz/sim/components/LinearAcceleration.hh>
-#include <gz/sim/components/Imu.hh>
-#include <gz/sim/components/JointAxis.hh>
-#include <gz/sim/components/JointForceCmd.hh>
-#include <gz/sim/components/JointPosition.hh>
-#include <gz/sim/components/JointPositionReset.hh>
-#include <gz/sim/components/JointTransmittedWrench.hh>
-#include <gz/sim/components/JointType.hh>
-#include <gz/sim/components/ForceTorque.hh>
-#include <gz/sim/components/JointVelocity.hh>
-#include <gz/sim/components/JointVelocityReset.hh>
-#include <gz/sim/components/Name.hh>
-#include <gz/sim/components/ParentEntity.hh>
-#include <gz/sim/components/Pose.hh>
-#include <gz/sim/components/Sensor.hh>
-#include <gz/sim/Link.hh>
-#include <gz/transport/Node.hh>
-#define GZ_TRANSPORT_NAMESPACE gz::transport::
-#define GZ_MSGS_NAMESPACE gz::msgs::
+#include <ignition/physics/Geometry.hh>
+#include <ignition/gazebo/components/AngularVelocity.hh>
+#include <ignition/gazebo/components/LinearAcceleration.hh>
+#include <ignition/gazebo/components/Imu.hh>
+#include <ignition/gazebo/components/JointAxis.hh>
+#include <ignition/gazebo/components/JointForceCmd.hh>
+#include <ignition/gazebo/components/JointPosition.hh>
+#include <ignition/gazebo/components/JointPositionReset.hh>
+#include <ignition/gazebo/components/JointTransmittedWrench.hh>
+#include <ignition/gazebo/components/JointType.hh>
+#include <ignition/gazebo/components/ForceTorque.hh>
+#include <ignition/gazebo/components/JointVelocity.hh>
+#include <ignition/gazebo/components/JointVelocityReset.hh>
+#include <ignition/gazebo/components/Name.hh>
+#include <ignition/gazebo/components/ParentEntity.hh>
+#include <ignition/gazebo/components/Pose.hh>
+#include <ignition/gazebo/components/Sensor.hh>
+#include <ignition/gazebo/Link.hh>
+#include <ignition/transport/Node.hh>
+#define GZ_TRANSPORT_NAMESPACE ignition::transport::
+#define GZ_MSGS_NAMESPACE ignition::msgs::
 
 #include <hardware_interface/hardware_info.hpp>
 #include <hardware_interface/lexical_casts.hpp>
@@ -243,9 +243,6 @@ namespace gz_quadruped_hardware
             auto& joint_info = hardware_info.joints[j];
             std::string joint_name = this->dataPtr->joints_[j].name = joint_info.name;
 
-            const auto limit = hardware_info.limits.find(joint_name);
-            if (limit == hardware_info.limits.end() || !limit->second.has_effort_limits) return false;
-            this->dataPtr->joints_[j].effort_limit = limit->second.max_effort;
             auto it_joint = enableJoints.find(joint_name);
             if (it_joint == enableJoints.end())
             {
@@ -261,6 +258,15 @@ namespace gz_quadruped_hardware
                 simjoint)->Data();
             this->dataPtr->joints_[j].joint_axis = _ecm.Component<sim::components::JointAxis>(
                 simjoint)->Data();
+
+            // Fortress's SDF joint axis retains the URDF effort limit. Humble
+            // HardwareInfo does not expose Jazzy's parsed joint-limits map.
+            const double effort = this->dataPtr->joints_[j].joint_axis.Effort();
+            if (!std::isfinite(effort) || effort <= 0.0) {
+                RCLCPP_ERROR(this->nh_->get_logger(), "Missing positive effort limit for %s", joint_name.c_str());
+                return false;
+            }
+            this->dataPtr->joints_[j].effort_limit = effort;
 
             // Create joint position component if one doesn't exist
             if (!_ecm.EntityHasComponentType(
@@ -289,22 +295,11 @@ namespace gz_quadruped_hardware
             // Accept this joint and continue configuration
             RCLCPP_INFO_STREAM(this->nh_->get_logger(), "Loading joint: " << joint_name);
 
-            // check if joint is mimicked
-            auto it = std::find_if(
-                hardware_info.mimic_joints.begin(),
-                hardware_info.mimic_joints.end(),
-                [j](const hardware_interface::MimicJoint& mj)
-                {
-                    return mj.joint_index == j;
-                });
-
-            if (it != hardware_info.mimic_joints.end())
-            {
-                RCLCPP_INFO_STREAM(
-                    this->nh_->get_logger(),
-                    "Joint '" << joint_name << "'is mimicking joint '" <<
-                    this->dataPtr->joints_[it->mimicked_joint_index].name <<
-                    "' with multiplier: " << it->multiplier << " and offset: " << it->offset);
+            // GO2 has independent actuated joints. Reject unsupported mimic
+            // parameters rather than silently driving coupled joints separately.
+            if (joint_info.parameters.count("mimic")) {
+                RCLCPP_ERROR(this->nh_->get_logger(), "Mimic joints are unsupported: %s", joint_name.c_str());
+                return false;
             }
 
             RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\tState:");
@@ -650,7 +645,7 @@ namespace gz_quadruped_hardware
             if (!jointPositions || !jointVelocity || !jointWrench || jointPositions->Data().empty() || jointVelocity->Data().empty()) continue;
             this->dataPtr->joints_[i].joint_position = jointPositions->Data()[0];
             this->dataPtr->joints_[i].joint_velocity = jointVelocity->Data()[0];
-            gz::physics::Vector3d force_or_torque;
+            ignition::physics::Vector3d force_or_torque;
             if (this->dataPtr->joints_[i].joint_type == sdf::JointType::PRISMATIC)
             {
                 force_or_torque = {
@@ -670,7 +665,7 @@ namespace gz_quadruped_hardware
             }
             // Calculate the scalar effort along the joint axis
             this->dataPtr->joints_[i].joint_effort = force_or_torque.dot(
-                gz::physics::Vector3d{
+                ignition::physics::Vector3d{
                     this->dataPtr->joints_[i].joint_axis.Xyz()[0],
                     this->dataPtr->joints_[i].joint_axis.Xyz()[1],
                     this->dataPtr->joints_[i].joint_axis.Xyz()[2]
@@ -701,7 +696,7 @@ namespace gz_quadruped_hardware
             // An accelerometer measures proper acceleration, so subtract world gravity
             // before rotating into the sensor frame.
             const auto acceleration_body = rotation.RotateVectorReverse(
-                linear_acceleration->Data() - gz::math::Vector3d(0.0, 0.0, -9.81));
+                linear_acceleration->Data() - ignition::math::Vector3d(0.0, 0.0, -9.81));
             imu->imu_sensor_data_[0] = rotation.X();
             imu->imu_sensor_data_[1] = rotation.Y();
             imu->imu_sensor_data_[2] = rotation.Z();

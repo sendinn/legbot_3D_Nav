@@ -4,10 +4,8 @@ This repository contains the reinforcement learning based controllers for the qu
 
 [![](http://i0.hdslb.com/bfs/archive/9886e7f9ed06d7f880b5614cb2f4c3ec1d7bf85f.jpg)](https://www.bilibili.com/video/BV1QP1pYBE47/)
 
-Tested environment:
+Target environment for this branch:
 
-* Ubuntu 24.04
-    * ROS2 Jazzy
 * Ubuntu 22.04
     * ROS2 Humble
 
@@ -46,7 +44,7 @@ source ~/ros2_ws/install/setup.bash
 ros2 launch rl_quadruped_controller mujoco.launch.py pkg_description:=go2_description
 ```
 
-### 3.2 Gazebo Harmonic
+### 3.2 Gazebo Fortress
 
 ```bash
 source ~/ros2_ws/install/setup.bash

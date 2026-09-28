@@ -27,9 +27,12 @@ StateRL::StateRL(CtrlInterfaces& ctrl_interfaces,
     enable_estimator_(ctrl_component.enable_estimator_),
     estimator_(ctrl_component.estimator_)
 {
-    node_->declare_parameter("robot_pkg", robot_pkg_);
-    node_->declare_parameter("model_folder", model_folder_);
-    node_->declare_parameter("use_rl_thread", use_rl_thread_);
+    if (!node_->has_parameter("robot_pkg"))
+        node_->declare_parameter("robot_pkg", robot_pkg_);
+    if (!node_->has_parameter("model_folder"))
+        node_->declare_parameter("model_folder", model_folder_);
+    if (!node_->has_parameter("use_rl_thread"))
+        node_->declare_parameter("use_rl_thread", use_rl_thread_);
     robot_pkg_ = node_->get_parameter("robot_pkg").as_string();
     model_folder_ = node_->get_parameter("model_folder").as_string();
     use_rl_thread_ = node_->get_parameter("use_rl_thread").as_bool();
@@ -396,35 +399,32 @@ void StateRL::getState()
 {
     if (params_.framework == "isaacgym")
     {
-        robot_state_.imu.quaternion[3] = ctrl_interfaces_.imu_state_interface_[0].get().get_optional().value();
-        robot_state_.imu.quaternion[0] = ctrl_interfaces_.imu_state_interface_[1].get().get_optional().value();
-        robot_state_.imu.quaternion[1] = ctrl_interfaces_.imu_state_interface_[2].get().get_optional().value();
-        robot_state_.imu.quaternion[2] = ctrl_interfaces_.imu_state_interface_[3].get().get_optional().value();
+        robot_state_.imu.quaternion[3] = ctrl_interfaces_.imu_state_interface_[0].get().get_value();
+        robot_state_.imu.quaternion[0] = ctrl_interfaces_.imu_state_interface_[1].get().get_value();
+        robot_state_.imu.quaternion[1] = ctrl_interfaces_.imu_state_interface_[2].get().get_value();
+        robot_state_.imu.quaternion[2] = ctrl_interfaces_.imu_state_interface_[3].get().get_value();
     }
     else if (params_.framework == "isaacsim")
     {
-        robot_state_.imu.quaternion[0] = ctrl_interfaces_.imu_state_interface_[0].get().get_optional().value();
-        robot_state_.imu.quaternion[1] = ctrl_interfaces_.imu_state_interface_[1].get().get_optional().value();
-        robot_state_.imu.quaternion[2] = ctrl_interfaces_.imu_state_interface_[2].get().get_optional().value();
-        robot_state_.imu.quaternion[3] = ctrl_interfaces_.imu_state_interface_[3].get().get_optional().value();
+        robot_state_.imu.quaternion[0] = ctrl_interfaces_.imu_state_interface_[0].get().get_value();
+        robot_state_.imu.quaternion[1] = ctrl_interfaces_.imu_state_interface_[1].get().get_value();
+        robot_state_.imu.quaternion[2] = ctrl_interfaces_.imu_state_interface_[2].get().get_value();
+        robot_state_.imu.quaternion[3] = ctrl_interfaces_.imu_state_interface_[3].get().get_value();
     }
 
-    robot_state_.imu.gyroscope[0] = ctrl_interfaces_.imu_state_interface_[4].get().get_optional().value();
-    robot_state_.imu.gyroscope[1] = ctrl_interfaces_.imu_state_interface_[5].get().get_optional().value();
-    robot_state_.imu.gyroscope[2] = ctrl_interfaces_.imu_state_interface_[6].get().get_optional().value();
+    robot_state_.imu.gyroscope[0] = ctrl_interfaces_.imu_state_interface_[4].get().get_value();
+    robot_state_.imu.gyroscope[1] = ctrl_interfaces_.imu_state_interface_[5].get().get_value();
+    robot_state_.imu.gyroscope[2] = ctrl_interfaces_.imu_state_interface_[6].get().get_value();
 
-    robot_state_.imu.accelerometer[0] = ctrl_interfaces_.imu_state_interface_[7].get().get_optional().value();
-    robot_state_.imu.accelerometer[1] = ctrl_interfaces_.imu_state_interface_[8].get().get_optional().value();
-    robot_state_.imu.accelerometer[2] = ctrl_interfaces_.imu_state_interface_[9].get().get_optional().value();
+    robot_state_.imu.accelerometer[0] = ctrl_interfaces_.imu_state_interface_[7].get().get_value();
+    robot_state_.imu.accelerometer[1] = ctrl_interfaces_.imu_state_interface_[8].get().get_value();
+    robot_state_.imu.accelerometer[2] = ctrl_interfaces_.imu_state_interface_[9].get().get_value();
 
     for (int i = 0; i < 12; i++)
     {
-        robot_state_.motor_state.q[i] = ctrl_interfaces_.joint_position_state_interface_[i].get().get_optional().
-            value();
-        robot_state_.motor_state.dq[i] = ctrl_interfaces_.joint_velocity_state_interface_[i].get().get_optional().
-            value();
-        robot_state_.motor_state.tauEst[i] = ctrl_interfaces_.joint_effort_state_interface_[i].get().get_optional().
-            value();
+        robot_state_.motor_state.q[i] = ctrl_interfaces_.joint_position_state_interface_[i].get().get_value();
+        robot_state_.motor_state.dq[i] = ctrl_interfaces_.joint_velocity_state_interface_[i].get().get_value();
+        robot_state_.motor_state.tauEst[i] = ctrl_interfaces_.joint_effort_state_interface_[i].get().get_value();
     }
 
     control_.x = ctrl_interfaces_.control_inputs_.ly;
@@ -488,16 +488,16 @@ void StateRL::setCommand() const
 {
     for (int i = 0; i < 12; i++)
     {
-        std::ignore = ctrl_interfaces_.joint_position_command_interface_[i].get().
+        ctrl_interfaces_.joint_position_command_interface_[i].get().
                                                                             set_value(
                                                                                 robot_command_.motor_command.q[i]);
-        std::ignore = ctrl_interfaces_.joint_velocity_command_interface_[i].get().set_value(
+        ctrl_interfaces_.joint_velocity_command_interface_[i].get().set_value(
             robot_command_.motor_command.dq[i]);
-        std::ignore = ctrl_interfaces_.joint_kp_command_interface_[i].get().set_value(
+        ctrl_interfaces_.joint_kp_command_interface_[i].get().set_value(
             robot_command_.motor_command.kp[i]);
-        std::ignore = ctrl_interfaces_.joint_kd_command_interface_[i].get().set_value(
+        ctrl_interfaces_.joint_kd_command_interface_[i].get().set_value(
             robot_command_.motor_command.kd[i]);
-        std::ignore = ctrl_interfaces_.joint_torque_command_interface_[i].get().
+        ctrl_interfaces_.joint_torque_command_interface_[i].get().
                                                                           set_value(
                                                                               robot_command_.motor_command.tau[i]);
     }

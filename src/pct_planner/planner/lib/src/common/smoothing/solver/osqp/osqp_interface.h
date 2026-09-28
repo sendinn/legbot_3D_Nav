@@ -1,6 +1,6 @@
 #pragma once
 
-#include <osqp/osqp.h>
+#include <osqp.h>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>

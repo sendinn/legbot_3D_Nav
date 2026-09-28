@@ -1,4 +1,4 @@
-"""GO2/HIMLoco on Gazebo Harmonic. Launching this file starts simulation."""
+"""GO2/HIMLoco on Gazebo Fortress. Launching this file starts simulation."""
 import os
 import xacro
 from ament_index_python.packages import get_package_share_directory as share
@@ -59,45 +59,42 @@ def setup(context):
             return next_actions if event.returncode == 0 else [EmitEvent(event=Shutdown(reason='GO2 startup process failed'))]
         return callback
     bridge_arguments = [
-        '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-        '/livox/scan/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-        '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
-        '/livox/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+        '/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock',
+        '/livox/scan/points@sensor_msgs/msg/PointCloud2[ignition.msgs.PointCloudPacked',
+        '/imu@sensor_msgs/msg/Imu[ignition.msgs.IMU',
+        '/livox/imu@sensor_msgs/msg/Imu[ignition.msgs.IMU',
     ]
     bridge_remappings = [('/livox/scan/points', '/livox/points_raw')]
     if publish_ground_truth:
-        bridge_arguments.append('/go2/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry')
+        bridge_arguments.append('/go2/odometry@nav_msgs/msg/Odometry[ignition.msgs.Odometry')
         bridge_remappings.append(('/go2/odometry', '/Odometry_gazebo'))
     # Do not publish a second odom -> base authority while FAST-LIO owns that
     # transform.  Gazebo pose TF is only part of the explicit truth pipeline.
     if use_ground_truth:
-        bridge_arguments.append('/go2/pose_tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V')
+        bridge_arguments.append('/go2/pose_tf@tf2_msgs/msg/TFMessage[ignition.msgs.Pose_V')
         bridge_remappings.append(('/go2/pose_tf', '/tf'))
     bridge = Node(
         package='ros_gz_bridge', executable='parameter_bridge', output='screen',
         parameters=[{'use_sim_time': True}], arguments=bridge_arguments,
         remappings=bridge_remappings)
     resource_path = os.path.join(share('legbot_bringup'), 'models')
-    if os.environ.get('GZ_SIM_RESOURCE_PATH'):
-        resource_path += os.pathsep + os.environ['GZ_SIM_RESOURCE_PATH']
+    if os.environ.get('IGN_GAZEBO_RESOURCE_PATH'):
+        resource_path += os.pathsep + os.environ['IGN_GAZEBO_RESOURCE_PATH']
     package_share = share('legbot_bringup')
     workspace_root = os.path.abspath(os.path.join(package_share, '..', '..', '..', '..'))
-    diagnostic_overlay = os.path.join(
-        workspace_root, '.deps', 'diagnostic_updater_4.2.7', 'opt', 'ros', 'jazzy', 'lib')
     library_path = os.environ.get('LD_LIBRARY_PATH', '')
     bundled_library_dirs = [
         os.path.join(workspace_root, 'third_party', 'libtorch', 'lib'),
         os.path.join(workspace_root, 'third_party', 'onnxruntime', 'lib'),
-        diagnostic_overlay,
     ]
     for directory in reversed(bundled_library_dirs):
         if os.path.isdir(directory):
             library_path = directory + (os.pathsep + library_path if library_path else '')
     return [
-        SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path),
+        SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', resource_path),
         SetEnvironmentVariable('LD_LIBRARY_PATH', library_path),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(share('ros_gz_sim'), 'launch/gz_sim.launch.py')),
-                                 launch_arguments={'gz_args': ' '.join(gz_args)}.items()),
+                                 launch_arguments={'gz_args': ' '.join(gz_args), 'gz_version': '6'}.items()),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': description, 'use_sim_time': True}],
              remappings=[('robot_description', '/go2/robot_description')]),

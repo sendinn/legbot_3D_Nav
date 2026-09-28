@@ -4,10 +4,8 @@ This repository contains the urdf model of go2.
 
 ![go2](../../../.images/go2.png)
 
-Tested environment:
+Target environment for this branch:
 
-* Ubuntu 24.04
-    * ROS2 Jazzy
 * Ubuntu 22.04
     * ROS2 Humble
 
@@ -58,7 +56,7 @@ ros2 launch go2_description visualize.launch.py
   ros2 launch unitree_guide_controller gazebo_classic.launch.py
   ```
 
-### 3.3 Gazebo Harmonic (ROS2 Jazzy)
+### 3.3 Gazebo Fortress (ROS2 Humble)
 
 * Unitree Guide Controller
   ```bash

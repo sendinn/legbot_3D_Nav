@@ -171,8 +171,8 @@
         <remapping>robot_description:=/go2/robot_description</remapping>
       </ros>
     </plugin>
-    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
-    <plugin filename="gz-sim-forcetorque-system" name="gz::sim::systems::ForceTorque"/>
+    <plugin filename="ignition-gazebo-imu-system" name="ignition::gazebo::systems::Imu"/>
+    <plugin filename="ignition-gazebo-forcetorque-system" name="ignition::gazebo::systems::ForceTorque"/>
   </gazebo>
 
   <gazebo reference="trunk">
@@ -290,7 +290,7 @@
       <sensor name='L1_lidar' type='gpu_lidar'>
         <topic>scan</topic>
         <update_rate>10</update_rate>
-        <gz_frame_id>lidar</gz_frame_id>
+        <ignition_frame_id>lidar</ignition_frame_id>
         <lidar>
           <scan>
             <horizontal>

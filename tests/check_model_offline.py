@@ -189,7 +189,7 @@ for mode in ('true', 'false'):
         artifact_dir.mkdir(parents=True, exist_ok=True)
         urdf = artifact_dir / 'go2.urdf'
         urdf.write_text(xml)
-        result = subprocess.run(['gz','sdf','-p',str(urdf)],check=True,capture_output=True,text=True)
+        result = subprocess.run(['ign','sdf','-p',str(urdf)],check=True,capture_output=True,text=True)
         (artifact_dir / 'go2.sdf').write_text(result.stdout)
         (artifact_dir / 'sdf_parser.log').write_text(result.stderr)
         sdf = ET.fromstring(result.stdout)
@@ -200,11 +200,11 @@ for mode in ('true', 'false'):
 world = Path(get_package_share_directory('legbot_bringup'))/'worlds/Building.sdf'
 model_path = str(world.parent.parent/'models')
 gz_environment = dict(os.environ)
-gz_environment['GZ_SIM_RESOURCE_PATH'] = os.pathsep.join(
-    item for item in (model_path, gz_environment.get('GZ_SIM_RESOURCE_PATH', '')) if item)
+gz_environment['IGN_GAZEBO_RESOURCE_PATH'] = os.pathsep.join(
+    item for item in (model_path, gz_environment.get('IGN_GAZEBO_RESOURCE_PATH', '')) if item)
 gz_environment['SDF_PATH'] = os.pathsep.join(
     item for item in (model_path, gz_environment.get('SDF_PATH', '')) if item)
-result = subprocess.run(['gz','sdf','-k',str(world)],check=True,capture_output=True,text=True,
+result = subprocess.run(['ign','sdf','-k',str(world)],check=True,capture_output=True,text=True,
                         env=gz_environment)
 assert 'Valid' in result.stdout, result.stdout+result.stderr
 
@@ -238,4 +238,4 @@ assert building_model.findtext('.//visual/cast_shadows') == 'false'
 
 installed_worlds = sorted(path.name for path in world.parent.glob('*.sdf') if path.is_file())
 assert installed_worlds == ['Building.sdf'], installed_worlds
-print('PASS GO2 URDF, policy provenance, combined Harmonic world and preserved lidar/IMU sensors')
+print('PASS GO2 URDF, policy provenance, combined Fortress world and preserved lidar/IMU sensors')

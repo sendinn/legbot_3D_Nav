@@ -1,15 +1,17 @@
 # Legbot：Unitree GO2 三维自主导航（ROS 2）
 
-[![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/24.04/)
-[![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E?logo=ros)](https://docs.ros.org/en/jazzy/)
-[![Gazebo Harmonic](https://img.shields.io/badge/Gazebo-Harmonic-F58113?logo=gazebo)](https://gazebosim.org/docs/harmonic/)
+> 本分支为 Humble 适配版本；环境准备和本次验证范围见 [Humble 适配说明](docs/HUMBLE_PORT.md)。下文继承的行走、楼梯与真机实验结论来自原 Jazzy 版本，尚不能视为 Humble 上的复现实验结果。
+
+[![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
+[![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314E?logo=ros)](https://docs.ros.org/en/humble/)
+[![Gazebo Fortress](https://img.shields.io/badge/Gazebo-Fortress-F58113?logo=gazebo)](https://gazebosim.org/docs/fortress/)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus)](https://isocpp.org/)
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python 3.10](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 [English](README.md) | 简体中文 | [项目技术分析](docs/PROJECT_ANALYSIS_CN.md) | [完整运行指南](运行指南.md)
 
-Legbot 是面向 Unitree GO2/GO2 EDU 的 ROS 2 Jazzy 三维导航工作区。工程将激光—惯性里程计、局部避障、多楼层参考路径、强化学习步态、Gazebo 仿真和带安全门的真机接口组织在同一套启动体系中。
+Legbot 是面向 Unitree GO2/GO2 EDU 的 ROS 2 Humble 三维导航工作区。工程将激光—惯性里程计、局部避障、多楼层参考路径、强化学习步态、Gazebo 仿真和带安全门的真机接口组织在同一套启动体系中。
 
 ## 项目作用
 
@@ -31,7 +33,7 @@ RViz 目标 / 三维关键点路线 / PCT 全局参考 ────────�
 
 ## 主要功能
 
-- Ubuntu 24.04、ROS 2 Jazzy、Gazebo Harmonic；
+- Ubuntu 22.04、ROS 2 Humble、Gazebo Fortress；
 - GO2 URDF、ros2_control、Gazebo 硬件插件和 Unitree SDK2 真机接口；
 - 仿真雷达、Unitree L1 原装雷达、Livox Mid-360 接入；
 - FAST-LIO 激光—惯性定位，不依赖 Gazebo 真值完成默认导航闭环；
@@ -46,25 +48,25 @@ RViz 目标 / 三维关键点路线 / PCT 全局参考 ────────�
 
 | 项目 | 要求 |
 | --- | --- |
-| 操作系统 | Ubuntu 24.04 LTS，当前验证平台为 x86_64 |
-| ROS | ROS 2 Jazzy，Fast DDS |
-| 仿真 | Gazebo Harmonic |
+| 操作系统 | Ubuntu 22.04 LTS，当前验证平台为 x86_64 |
+| ROS | ROS 2 Humble，Fast DDS |
+| 仿真 | Gazebo Fortress |
 | 编译 | GCC、CMake、colcon，C++17 |
-| Python | Python 3.12、NumPy、SciPy；PCT 制图还使用 Open3D/CuPy |
+| Python | Python 3.10、NumPy、SciPy；PCT 制图还使用 Open3D/CuPy |
 | 数学/点云 | Eigen3、PCL、OpenCV、yaml-cpp |
 | 控制 | ros2_control、ros2_controllers |
 | 推理 | LibTorch（C++11 ABI）、ONNX Runtime 1.23.2 |
 | 硬件 SDK | Unitree SDK2、Livox SDK2/Driver2 |
 
-安装 ROS 2 Jazzy Desktop 后，可先安装系统依赖：
+安装 ROS 2 Humble Desktop 后，可先安装系统依赖：
 
 ```bash
 sudo apt update
 sudo apt install ros-dev-tools python3-rosdep python3-vcstool \
   libeigen3-dev libpcl-dev libopencv-dev libyaml-cpp-dev \
-  ros-jazzy-ros-gz ros-jazzy-ros2-control ros-jazzy-ros2-controllers \
-  ros-jazzy-pcl-ros ros-jazzy-cv-bridge ros-jazzy-tf2-sensor-msgs \
-  ros-jazzy-backward-ros ros-jazzy-rmw-fastrtps-cpp
+  ros-humble-ros-gz ros-humble-ros2-control ros-humble-ros2-controllers \
+  ros-humble-pcl-ros ros-humble-cv-bridge ros-humble-tf2-sensor-msgs \
+  ros-humble-backward-ros ros-humble-rmw-fastrtps-cpp
 sudo rosdep init 2>/dev/null || true
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
@@ -78,7 +80,6 @@ third_party/onnxruntime
 third_party/unitree_sdk2/install
 third_party/Livox-SDK2/install
 third_party/pct/install
-.deps/diagnostic_updater_4.2.7/opt/ros/jazzy/lib
 ```
 
 SDK 固定版本见 [`docs/SENSOR_SDK_UPSTREAM_LOCK.json`](docs/SENSOR_SDK_UPSTREAM_LOCK.json)，模型来源、输入维度和 SHA-256 见 [`docs/GO2_POLICY_MODELS_LOCK.json`](docs/GO2_POLICY_MODELS_LOCK.json)。
@@ -97,14 +98,15 @@ SDK 固定版本见 [`docs/SENSOR_SDK_UPSTREAM_LOCK.json`](docs/SENSOR_SDK_UPSTR
 | `src/gz_quadruped_hardware` | Gazebo ros2_control 插件 |
 | `src/hardware_unitree_sdk2` | GO2 真机接口和 L1 雷达桥 |
 | `tools` | 编译、环境、离线检查、真机只读预检 |
-| `tests` | 不启动仿真和电机的检查脚本 |
+| `tests` | 离线检查和单独执行的仿真启动检查 |
 | `docs` | 项目分析、架构状态、上游版本与模型锁定记录 |
 
 ## 编译与离线检查
 
 ```bash
-git clone --branch ROS2 https://github.com/Robot-Nav/legbot_3D_Nav.git
-cd legbot_3D_Nav
+# 使用当前工作区已创建的本地 humble 分支
+cd /path/to/legbot_3D_Nav
+git switch humble
 
 ./tools/build.sh
 source tools/env.sh

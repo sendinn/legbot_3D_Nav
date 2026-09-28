@@ -12,22 +12,18 @@ else
 fi
 
 pct_lib_dir="${PCT_THIRDPARTY_LIB_DIR:-${pct_workspace_dir}/third_party/pct/install/lib}"
-pct_python="${PCT_PYTHON:-${pct_workspace_dir}/.venv-jazzy/bin/python3}"
+pct_python="${PCT_PYTHON:-${pct_workspace_dir}/.venv-humble/bin/python3}"
 pct_native_lib_dir="${pct_planner_dir}/lib"
 if ! compgen -G "${pct_native_lib_dir}/a_star*.so" >/dev/null; then
   pct_native_lib_dir="${pct_workspace_dir}/install/pct_planner/share/pct_planner/planner/lib"
 fi
 if [[ ! -x "${pct_python}" ]]; then
-  echo "[PCT preflight] Python 3.12 environment missing: ${pct_python}" >&2
+  echo "[PCT preflight] Python 3.10 environment missing: ${pct_python}" >&2
   exit 1
 fi
 pct_python="$(cd "$(dirname "${pct_python}")" && pwd)/$(basename "${pct_python}")"
-if [[ ! -f "${pct_lib_dir}/libmetis-gtsam.so" ]]; then
-  echo "[PCT preflight] libmetis-gtsam.so missing: ${pct_lib_dir}" >&2
-  echo "Set PCT_THIRDPARTY_LIB_DIR to the directory containing this library." >&2
-  exit 1
-fi
-pct_lib_dir="$(cd "${pct_lib_dir}" && pwd)"
+# Native imports below resolve GTSAM and its dependencies from the active
+# Humble environment. ROS-packaged GTSAM need not live in third_party.
 if ! compgen -G "${pct_native_lib_dir}/a_star*.so" >/dev/null; then
   echo "[PCT preflight] Native PCT modules missing: ${pct_native_lib_dir}" >&2
   echo "Build pct_planner before starting PCT." >&2
@@ -40,14 +36,12 @@ export PYTHONDONTWRITEBYTECODE=1
 
 "${pct_python}" -c '
 import ast
-import ctypes
 from pathlib import Path
 import sys
-if sys.version_info[:2] != (3, 12):
-    raise SystemExit("[PCT preflight] Native PCT modules require Python 3.12")
-ctypes.CDLL("libmetis-gtsam.so")
+if sys.version_info[:2] != (3, 10):
+    raise SystemExit("[PCT preflight] Native PCT modules require Python 3.10")
 from lib import a_star, ele_planner, traj_opt, py_map_manager
-import open3d, cupy, rclpy
+import rclpy
 from planner_wrapper import TomogramPlanner
 from interactive_markers.interactive_marker_server import InteractiveMarkerServer
 ast.parse(Path(sys.argv[1]).read_text(encoding="utf-8"))

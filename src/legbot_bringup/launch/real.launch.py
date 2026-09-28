@@ -30,13 +30,10 @@ def setup(context):
     controller_file = controller_files[val('policy_profile')]
     package_share = share('legbot_bringup')
     workspace_root = os.path.abspath(os.path.join(package_share, '..', '..', '..', '..'))
-    diagnostic_overlay = os.path.join(
-        workspace_root, '.deps', 'diagnostic_updater_4.2.7', 'opt', 'ros', 'jazzy', 'lib')
     library_path = os.environ.get('LD_LIBRARY_PATH', '')
     bundled_library_dirs = [
         os.path.join(workspace_root, 'third_party', 'libtorch', 'lib'),
         os.path.join(workspace_root, 'third_party', 'onnxruntime', 'lib'),
-        diagnostic_overlay,
     ]
     for directory in reversed(bundled_library_dirs):
         if os.path.isdir(directory):
@@ -44,12 +41,13 @@ def setup(context):
     manager = Node(package='controller_manager', executable='ros2_control_node', output='screen',
                    parameters=[os.path.join(share('go2_description'),'config',controller_file), {
                        'use_sim_time': False,
+                       'robot_description': description,
                        # The policy controller runs at 200 Hz and infers every four
                        # updates (50 Hz). 400 Hz keeps an integer 2:1 hardware to
                        # controller ratio and gives the non-RT host 2.5 ms per cycle.
                        'update_rate': int(val('hardware_update_rate')),
                    }],
-                   remappings=[('/robot_description', '/go2/robot_description')])
+                   remappings=[('~/robot_description', '/go2/robot_description')])
     controllers = ['joint_state_broadcaster','imu_sensor_broadcaster']
     if val('enable_commands') == 'true':
         controllers.append('rl_quadruped_controller')

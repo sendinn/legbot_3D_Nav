@@ -25,11 +25,10 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
 
-find_package(gz_sim_vendor REQUIRED)
-find_package(gz-sim REQUIRED)
+find_package(ignition-gazebo6 REQUIRED)
 
-find_package(gz_plugin_vendor REQUIRED)
-find_package(gz-plugin REQUIRED)
+find_package(ignition-plugin1 REQUIRED COMPONENTS register)
+find_package(rclcpp_lifecycle REQUIRED)
 
 include_directories(include)
 
@@ -38,8 +37,8 @@ add_library(${PROJECT_NAME}-system SHARED
 )
 
 target_link_libraries(${PROJECT_NAME}-system
-        gz-sim::gz-sim
-        gz-plugin::register
+        ignition-gazebo6::ignition-gazebo6
+        ignition-plugin1::register
 )
 ament_target_dependencies(${PROJECT_NAME}-system
         ament_index_cpp
@@ -62,7 +61,7 @@ ament_target_dependencies(gz_quadruped_plugins
         rclcpp
 )
 target_link_libraries(gz_quadruped_plugins
-        gz-sim::gz-sim
+        ignition-gazebo6::ignition-gazebo6
 )
 
 ## Install

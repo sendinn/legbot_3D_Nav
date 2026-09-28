@@ -9,6 +9,8 @@
 #include "hardware_interface/system_interface.hpp"
 #include <condition_variable>
 #include <mutex>
+#include <urdf/model.h>
+#include <rclcpp/rclcpp.hpp>
 #include <chrono>
 #include <unitree/idl/go2/WirelessController_.hpp>
 #include <unitree/idl/go2/LowState_.hpp>
@@ -32,6 +34,8 @@ public:
     hardware_interface::return_type write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override;
 
 protected:
+    urdf::Model urdf_model_;
+    rclcpp::Logger get_logger() const { return rclcpp::get_logger("hardware_unitree_sdk2"); }
     std::vector<double> joint_torque_command_;
     std::vector<double> joint_position_command_;
     std::vector<double> joint_velocities_command_;

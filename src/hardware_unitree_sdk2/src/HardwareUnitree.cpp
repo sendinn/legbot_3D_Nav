@@ -23,6 +23,16 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Hardwa
         return CallbackReturn::ERROR;
     }
 
+    if (!urdf_model_.initString(info.original_xml)) return CallbackReturn::ERROR;
+    for (const auto &joint_info : info.joints) {
+        const auto joint = urdf_model_.getJoint(joint_info.name);
+        if (!joint || !joint->limits || !std::isfinite(joint->limits->effort) ||
+            joint->limits->effort <= 0 || !std::isfinite(joint->limits->lower) ||
+            !std::isfinite(joint->limits->upper) || joint->limits->lower > joint->limits->upper) {
+            RCLCPP_ERROR(get_logger(), "Invalid URDF limits for %s", joint_info.name.c_str());
+            return CallbackReturn::ERROR;
+        }
+    }
     joint_torque_command_.assign(12, 0);
     joint_position_command_.assign(12, 0);
     joint_velocities_command_.assign(12, 0);
@@ -282,17 +292,16 @@ return_type HardwareUnitree::write(const rclcpp::Time& /*time*/, const rclcpp::D
             !std::isfinite(joint_torque_command_[i])) return return_type::ERROR;
     }
     for (int i=0; i<12; ++i) {
-        const auto it = info_.limits.find(info_.joints[i].name);
-        if (it == info_.limits.end() || !it->second.has_effort_limits) return return_type::ERROR;
-        const auto &limit = it->second;
-        if (limit.has_position_limits)
-            joint_position_command_[i] = std::clamp(joint_position_command_[i], limit.min_position, limit.max_position);
+        const auto joint = urdf_model_.getJoint(info_.joints[i].name);
+        const auto &limit = *joint->limits;
+        if (joint->type != urdf::Joint::CONTINUOUS)
+            joint_position_command_[i] = std::clamp(joint_position_command_[i], limit.lower, limit.upper);
         const double kp = joint_kp_command_[i];
         const double kd = joint_kd_command_[i];
         if (kp < 0 || kd < 0) return return_type::ERROR;
         const double tau = kp * (joint_position_command_[i]-low_state_.motor_state()[i].q()) +
             kd * (joint_velocities_command_[i]-low_state_.motor_state()[i].dq()) + joint_torque_command_[i];
-        const double scale = std::abs(tau) > limit.max_effort ? limit.max_effort/std::abs(tau) : 1.0;
+        const double scale = std::abs(tau) > limit.effort ? limit.effort/std::abs(tau) : 1.0;
         joint_kp_command_[i] *= scale; joint_kd_command_[i] *= scale; joint_torque_command_[i] *= scale;
     }
     // send command

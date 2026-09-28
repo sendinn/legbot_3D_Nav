@@ -23,19 +23,22 @@
 #include <utility>
 #include <vector>
 
-#include <gz/sim/components/Joint.hh>
-#include <gz/sim/components/JointType.hh>
-#include <gz/sim/components/Name.hh>
-#include <gz/sim/components/ParentEntity.hh>
-#include <gz/sim/components/World.hh>
-#include <gz/sim/Model.hh>
-#include <gz/plugin/Register.hh>
+#include <ignition/gazebo/components/Joint.hh>
+#include <ignition/gazebo/components/JointType.hh>
+#include <ignition/gazebo/components/Name.hh>
+#include <ignition/gazebo/components/ParentEntity.hh>
+#include <ignition/gazebo/components/World.hh>
+#include <ignition/gazebo/Model.hh>
+#include <ignition/plugin/Register.hh>
 
 
 #include <controller_manager/controller_manager.hpp>
 
 #include <hardware_interface/resource_manager.hpp>
 #include <hardware_interface/component_parser.hpp>
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
+#include <lifecycle_msgs/msg/state.hpp>
+#include <rclcpp/parameter_map.hpp>
 
 #include <pluginlib/class_loader.hpp>
 
@@ -53,8 +56,7 @@ namespace gz_quadruped_hardware
             rclcpp::Node::SharedPtr& node,
             sim::EntityComponentManager& ecm,
             std::map<std::string, sim::Entity> enabledJoints)
-            : ResourceManager(
-                  node->get_node_clock_interface(), node->get_node_logging_interface()),
+            : ResourceManager(),
               gz_system_loader_("gz_quadruped_hardware", "gz_quadruped_hardware::GazeboSimSystemInterface"),
               logger_(node->get_logger().get_child("GZResourceManager"))
         {
@@ -65,25 +67,25 @@ namespace gz_quadruped_hardware
 
         GZResourceManager(const GZResourceManager&) = delete;
 
-        // Called from Controller Manager when robot description is initialized from callback
+        // Initialize Humble simulation resources before constructing ControllerManager.
         bool load_and_initialize_components(
             const std::string& urdf,
-            unsigned int update_rate) override
+            unsigned int update_rate)
         {
-            components_are_loaded_and_initialized_ = true;
+            // Humble imports simulation hardware explicitly instead of the Jazzy callback.
+            load_urdf(urdf, false, false);
 
             const auto hardware_info = hardware_interface::parse_control_resources_from_urdf(urdf);
 
             for (const auto& individual_hardware_info : hardware_info)
             {
-                std::string robot_hw_sim_type_str_ = individual_hardware_info.hardware_plugin_name;
+                std::string robot_hw_sim_type_str_ = individual_hardware_info.hardware_class_type;
                 RCLCPP_DEBUG(
                     logger_, "Load hardware interface %s ...",
                     robot_hw_sim_type_str_.c_str());
 
                 // Load hardware
                 std::unique_ptr<GazeboSimSystemInterface> gzSimSystem;
-                std::scoped_lock guard(resource_interfaces_lock_, claimed_command_interfaces_lock_);
                 try
                 {
                     gzSimSystem = std::unique_ptr<GazeboSimSystemInterface>(
@@ -95,7 +97,7 @@ namespace gz_quadruped_hardware
                         logger_,
                         "The plugin failed to load for some reason. Error: %s\n",
                         ex.what());
-                    continue;
+                    return false;
                 }
 
                 // initialize simulation requirements
@@ -108,8 +110,7 @@ namespace gz_quadruped_hardware
                 {
                     RCLCPP_FATAL(
                         logger_, "Could not initialize robot simulation interface");
-                    components_are_loaded_and_initialized_ = false;
-                    break;
+                    return false;
                 }
                 RCLCPP_DEBUG(
                     logger_, "Initialized robot simulation interface %s!",
@@ -117,9 +118,17 @@ namespace gz_quadruped_hardware
 
                 // initialize hardware
                 import_component(std::move(gzSimSystem), individual_hardware_info);
+                rclcpp_lifecycle::State active(
+                    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE,
+                    hardware_interface::lifecycle_state_names::ACTIVE);
+                if (set_component_state(individual_hardware_info.name, active) !=
+                    hardware_interface::return_type::OK) {
+                    RCLCPP_ERROR(logger_, "Could not activate simulation hardware");
+                    return false;
+                }
             }
 
-            return components_are_loaded_and_initialized_;
+            return !hardware_info.empty();
         }
 
     private:
@@ -254,14 +263,12 @@ namespace gz_quadruped_hardware
     //////////////////////////////////////////////////
     GazeboSimQuadrupedPlugin::~GazeboSimQuadrupedPlugin()
     {
-        // Stop controller manager thread
-        if (!this->dataPtr->controller_manager_)
-        {
-            return;
+        if (this->dataPtr->executor_) {
+            this->dataPtr->executor_->cancel();
         }
-        this->dataPtr->executor_->remove_node(this->dataPtr->controller_manager_);
-        this->dataPtr->executor_->cancel();
-        this->dataPtr->thread_executor_spin_.join();
+        if (this->dataPtr->thread_executor_spin_.joinable()) {
+            this->dataPtr->thread_executor_spin_.join();
+        }
     }
 
     //////////////////////////////////////////////////
@@ -391,8 +398,42 @@ namespace gz_quadruped_hardware
             return;
         }
 
-        std::unique_ptr<hardware_interface::ResourceManager> resource_manager_ =
+        // Humble does not provide Jazzy's ResourceManager initialization callback.
+        // Fetch the same GO2 description that is used to spawn this model.
+        auto client = std::make_shared<rclcpp::AsyncParametersClient>(
+            this->dataPtr->node_, "/robot_state_publisher");
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (!client->wait_for_service(std::chrono::milliseconds(500))) {
+            if (!rclcpp::ok() || std::chrono::steady_clock::now() >= deadline) {
+                RCLCPP_ERROR(logger, "Timed out waiting for GO2 robot description");
+                return;
+            }
+        }
+        auto future = client->get_parameters({"robot_description"});
+        if (future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+            RCLCPP_ERROR(logger, "Timed out reading GO2 robot description");
+            return;
+        }
+        const auto urdf = future.get().at(0).as_string();
+        unsigned int hardware_rate = 0;
+        const auto parameter_map = rclcpp::parameter_map_from_yaml_file(param_file_name);
+        for (const auto& entry : parameter_map) {
+            if (entry.first != "/" + controllerManagerNodeName &&
+                entry.first != ns + "/" + controllerManagerNodeName && entry.first != "/**") continue;
+            for (const auto& parameter : entry.second) {
+                if (parameter.get_name() == "update_rate" && parameter.as_int() > 0)
+                    hardware_rate = static_cast<unsigned int>(parameter.as_int());
+            }
+        }
+        if (hardware_rate == 0) {
+            RCLCPP_ERROR(logger, "Missing positive controller_manager update_rate");
+            return;
+        }
+        auto simulation_resources =
             std::make_unique<GZResourceManager>(this->dataPtr->node_, _ecm, enabledJoints);
+        if (!simulation_resources->load_and_initialize_components(urdf, hardware_rate)) return;
+        std::unique_ptr<hardware_interface::ResourceManager> resource_manager_ =
+            std::move(simulation_resources);
 
         // Create the controller manager
         RCLCPP_INFO(this->dataPtr->node_->get_logger(), "Loading controller_manager");
@@ -402,6 +443,7 @@ namespace gz_quadruped_hardware
         arguments.emplace_back("-r");
         arguments.push_back("__ns:=" + ns);
         options.arguments(arguments);
+        options.append_parameter_override("robot_description", urdf);
         options.append_parameter_override("use_sim_time", true);  // enable sim time for controller manager
 
         this->dataPtr->controller_manager_ = std::make_shared<controller_manager::ControllerManager>(
@@ -421,15 +463,6 @@ namespace gz_quadruped_hardware
         // Force setting of use_sim_time parameter
         this->dataPtr->controller_manager_->set_parameter(
             rclcpp::Parameter("use_sim_time", rclcpp::ParameterValue(true)));
-
-        // Wait for CM to receive robot description from the topic and then initialize Resource Manager
-        while (!this->dataPtr->controller_manager_->is_resource_manager_initialized())
-        {
-            RCLCPP_WARN(
-                this->dataPtr->node_->get_logger(),
-                "Waiting RM to load and initialize hardware...");
-            std::this_thread::sleep_for(std::chrono::microseconds(2000000));
-        }
 
         this->dataPtr->entity_ = _entity;
     }
@@ -503,9 +536,9 @@ namespace gz_quadruped_hardware
     }
 } // namespace gz_quadruped_hardware
 
-GZ_ADD_PLUGIN(
+IGNITION_ADD_PLUGIN(
     gz_quadruped_hardware::GazeboSimQuadrupedPlugin,
-    gz::sim::System,
+    ignition::gazebo::System,
     gz_quadruped_hardware::GazeboSimQuadrupedPlugin::ISystemConfigure,
     gz_quadruped_hardware::GazeboSimQuadrupedPlugin::ISystemPreUpdate,
     gz_quadruped_hardware::GazeboSimQuadrupedPlugin::ISystemPostUpdate)

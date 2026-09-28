@@ -204,12 +204,12 @@
   </joint>
   <xacro:if value="$(arg GAZEBO)">
     <gazebo reference="livox_imu_link">
-      <sensor name="livox_imu" type="imu"><topic>/livox/imu</topic><gz_frame_id>livox_imu_link</gz_frame_id><always_on>true</always_on><update_rate>200</update_rate></sensor>
+      <sensor name="livox_imu" type="imu"><topic>/livox/imu</topic><ignition_frame_id>livox_imu_link</ignition_frame_id><always_on>true</always_on><update_rate>200</update_rate></sensor>
     </gazebo>
     <xacro:if value="$(arg ENABLE_LIDAR)">
       <gazebo reference="livox_link">
         <sensor name="navigation_lidar" type="gpu_lidar">
-          <topic>/livox/scan</topic><gz_frame_id>livox_link</gz_frame_id>
+          <topic>/livox/scan</topic><ignition_frame_id>livox_link</ignition_frame_id>
           <update_rate>10</update_rate><always_on>true</always_on><visualize>false</visualize>
           <lidar><scan>
             <horizontal><samples>720</samples><resolution>1</resolution><min_angle>-3.14159265</min_angle><max_angle>3.14159265</max_angle></horizontal>
@@ -219,7 +219,7 @@
       </gazebo>
     </xacro:if>
     <gazebo>
-      <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
         <odom_frame>odom</odom_frame><robot_base_frame>base</robot_base_frame>
         <odom_topic>/go2/odometry</odom_topic><tf_topic>/go2/pose_tf</tf_topic>
         <odom_publish_frequency>100</odom_publish_frequency><dimensions>3</dimensions>

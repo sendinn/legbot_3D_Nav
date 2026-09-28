@@ -90,7 +90,7 @@ def generate_launch_description():
         Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
-            arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
+            arguments=['/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock'],
             output='screen'
         ),
         IncludeLaunchDescription(

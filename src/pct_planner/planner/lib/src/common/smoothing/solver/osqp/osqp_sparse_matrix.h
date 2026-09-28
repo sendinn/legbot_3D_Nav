@@ -1,7 +1,7 @@
 #pragma once
 
 // #include <glog/logging.h>
-#include <osqp/cs.h>
+#include <cs.h>
 
 #include <Eigen/Sparse>
 

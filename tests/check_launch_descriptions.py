@@ -30,8 +30,8 @@ for path in sorted(Path('src/legbot_bringup/launch').glob('*.launch.py')):
         actions += module.setup(context)
     if path.name == 'real.launch.py':
         real_source = path.read_text()
-        assert "('/robot_description', '/go2/robot_description')" in real_source
-        assert "('~/robot_description','/go2/robot_description')" not in real_source
+        assert "('~/robot_description', '/go2/robot_description')" in real_source
+        assert "'robot_description': description" in real_source
         ethernet = next((item.name for item in Path('/sys/class/net').iterdir() if item.name != 'lo'), None)
         if ethernet:
             assert context.launch_configurations['policy_profile'] == 'moe_cts_77k'

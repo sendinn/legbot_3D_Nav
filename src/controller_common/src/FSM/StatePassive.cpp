@@ -13,23 +13,23 @@ void StatePassive::enter()
 {
     for (auto i : ctrl_interfaces_.joint_torque_command_interface_)
     {
-        std::ignore = i.get().set_value(0.0);
+        i.get().set_value(0.0);
     }
     for (auto i : ctrl_interfaces_.joint_position_command_interface_)
     {
-        std::ignore = i.get().set_value(0.0);
+        i.get().set_value(0.0);
     }
     for (auto i : ctrl_interfaces_.joint_velocity_command_interface_)
     {
-        std::ignore = i.get().set_value(0.0);
+        i.get().set_value(0.0);
     }
     for (auto i : ctrl_interfaces_.joint_kp_command_interface_)
     {
-        std::ignore = i.get().set_value(0.0);
+        i.get().set_value(0.0);
     }
     for (auto i : ctrl_interfaces_.joint_kd_command_interface_)
     {
-        std::ignore = i.get().set_value(1.0);
+        i.get().set_value(1.0);
     }
     ctrl_interfaces_.control_inputs_.command = 0;
 }

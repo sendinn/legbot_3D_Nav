@@ -2,9 +2,7 @@
 
 This node will read the keyboard input and publish a control_input_msgs/Input message.
 
-Tested environment:
-* Ubuntu 24.04
-  * ROS2 Jazzy
+Target environment for this branch:
 * Ubuntu 22.04
   * ROS2 Humble
 

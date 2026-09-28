@@ -17,8 +17,8 @@
 #include <memory>
 #include <string>
 
-#include <gz/sim/System.hh>
-namespace sim = gz::sim;
+#include <ignition/gazebo/System.hh>
+namespace sim = ignition::gazebo;
 
 #include <hardware_interface/system_interface.hpp>
 
