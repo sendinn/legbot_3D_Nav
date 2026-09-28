@@ -9,6 +9,8 @@ from pathlib import Path
 import signal
 import subprocess
 import time
+import sys
+import shlex
 
 # Set transport isolation before initializing rclpy or launching Gazebo.
 os.environ['ROS_DOMAIN_ID'] = '179'
@@ -16,9 +18,20 @@ os.environ['ROS_LOCALHOST_ONLY'] = '1'
 os.environ['IGN_IP'] = '127.0.0.1'
 os.environ['IGN_PARTITION'] = f'legbot_humble_test_{os.getpid()}'
 
-import rclpy
-from controller_manager_msgs.srv import ListControllers
-from sensor_msgs.msg import JointState
+try:
+    import rclpy
+    from controller_manager_msgs.srv import ListControllers
+    from sensor_msgs.msg import JointState
+except ModuleNotFoundError as error:
+    workspace = Path(__file__).resolve().parents[1]
+    raise SystemExit(
+        f"缺少 ROS Python 模块：{error.name}（Python：{sys.executable}）。\n"
+        "请在同一个终端加载完整工作区环境，再运行检查：\n"
+        f"  cd {shlex.quote(str(workspace))}\n"
+        "  source tools/env.sh\n"
+        "  python3 tests/check_humble_sim.py\n"
+        "如果加载后仍然缺少模块，请先执行 ./install.sh 安装依赖。"
+    ) from None
 
 
 def main():

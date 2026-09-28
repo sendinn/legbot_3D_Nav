@@ -1,3 +1,4 @@
-# Ubuntu 22.04 / Python 3.10; NumPy/SciPy supplied by system packages.
+# Ubuntu 22.04 / Python 3.10. Keep NumPy 1.x for the system pybind11 ABI.
+numpy==1.26.4
 open3d==0.19.0
 cupy-cuda12x==13.6.0

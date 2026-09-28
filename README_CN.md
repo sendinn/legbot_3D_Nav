@@ -58,29 +58,23 @@ RViz 目标 / 三维关键点路线 / PCT 全局参考 ────────�
 | 推理 | LibTorch（C++11 ABI）、ONNX Runtime 1.23.2 |
 | 硬件 SDK | Unitree SDK2、Livox SDK2/Driver2 |
 
-安装 ROS 2 Humble Desktop 后，可先安装系统依赖：
+新机器（Ubuntu 22.04 x86_64）在仓库目录用普通用户执行：
 
 ```bash
-sudo apt update
-sudo apt install ros-dev-tools python3-rosdep python3-vcstool \
-  libeigen3-dev libpcl-dev libopencv-dev libyaml-cpp-dev \
-  ros-humble-ros-gz ros-humble-ros2-control ros-humble-ros2-controllers \
-  ros-humble-pcl-ros ros-humble-cv-bridge ros-humble-tf2-sensor-msgs \
-  ros-humble-backward-ros ros-humble-rmw-fastrtps-cpp
-sudo rosdep init 2>/dev/null || true
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y
+./install.sh
+./build.sh
+source tools/env.sh
 ```
 
-大型运行库不提交到 Git，需要在编译前准备：
+`install.sh` 自动准备 ROS Humble 软件源与 Desktop、Fortress、系统依赖、
+LibTorch/ONNX Runtime、固定版本 SDK、OSQP、Python 环境和 Git LFS 策略文件。
+系统安装步骤会调用 `sudo`，其他依赖保存在工作区内。重复执行会复用下载缓存和编译产物。
+`build.sh` 默认单包 2 线程、各包顺序编译，可用 `./build.sh --jobs 4` 调整，
+也支持 `--packages-select`、`--packages-up-to`。
 
-```text
-third_party/libtorch
-third_party/onnxruntime
-third_party/unitree_sdk2/install
-third_party/Livox-SDK2/install
-third_party/pct/install
-```
+默认支持已有 tomogram 的 CPU 规划；需要从 PCD 制图时执行
+`./install.sh --with-tomography`，运行制图还需可用的 CUDA 12 驱动/运行环境。
+详细选项与手动依赖说明见 [Humble 安装说明](docs/HUMBLE_PORT.md)。
 
 SDK 固定版本见 [`docs/SENSOR_SDK_UPSTREAM_LOCK.json`](docs/SENSOR_SDK_UPSTREAM_LOCK.json)，模型来源、输入维度和 SHA-256 见 [`docs/GO2_POLICY_MODELS_LOCK.json`](docs/GO2_POLICY_MODELS_LOCK.json)。
 
@@ -108,7 +102,7 @@ SDK 固定版本见 [`docs/SENSOR_SDK_UPSTREAM_LOCK.json`](docs/SENSOR_SDK_UPSTR
 cd /path/to/legbot_3D_Nav
 git switch humble
 
-./tools/build.sh
+./build.sh
 source tools/env.sh
 ./tools/check_offline.sh
 ```
@@ -120,6 +114,25 @@ PASS offline checks; no simulation or robot experiment was started by this check
 ```
 
 ## 组合地形仿真快速启动
+
+推荐在工作区根目录一键启动：
+
+```bash
+./simulation.sh
+# 无界面：./simulation.sh --headless
+```
+
+脚本自动加载环境、等待控制器激活并启动完整导航入口；等待“导航数据已就绪”后
+在 RViz 使用 **2D Goal Pose**。Ctrl+C 自动关闭本次启动的进程。
+启动时会分别询问 Gazebo 和 RViz 是否使用 GPU（y/n）。WSL 上 Gazebo 默认 CPU 软件渲染，
+RViz 默认 GPU；回车接受默认值。Gazebo 的选择包含雷达渲染，无界面时仍需选择。
+关闭 RViz 时跳过其询问；非交互运行和 `--check` 使用默认值。
+可直接指定：`./simulation.sh --gazebo-rendering software --rviz-rendering gpu`。
+两者渲染环境独立，Gazebo 的软件渲染设置不会再传给 RViz。
+GPU 选项取消 CPU 强制设置，实际渲染设备由系统驱动决定；本机 WSL 的 Gazebo GPU 雷达此前曾崩溃。
+
+详细注释、日志路径和参数见 `simulation.sh --help` 及 [运行指南](运行指南.md)。
+下方六终端流程用于分模块调试，不要与一键入口同时运行。
 
 每个命令使用独立终端；新终端先进入工作区并执行 `source tools/env.sh`。
 

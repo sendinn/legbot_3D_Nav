@@ -5,7 +5,36 @@
 两个分支的 `build/`、`install/`、虚拟环境和二进制依赖不可混用；切换发行版推荐使用独立 worktree。
 本次操作不推送远端分支。
 
-## 系统依赖
+## 新机器两步安装
+
+在 Ubuntu 22.04 x86_64 上，用普通用户在当前 `humble` 工作区执行：
+
+```bash
+./install.sh
+./build.sh
+source tools/env.sh
+./tools/check_offline.sh
+```
+
+无需预先安装 ROS；安装脚本按 [ROS 官方流程](https://github.com/ros2/ros2_documentation/blob/humble/source/Installation/Ubuntu-Install-Debs.rst)
+检查软件源，缺失时获取官方 `ros2-apt-source` 安装包，再安装 Humble Desktop 与依赖。
+需要联网和 sudo 权限；不要用 sudo 执行整个脚本。当前不支持 ARM64 或 Ubuntu 24.04。
+
+| 选项 | 作用 |
+| --- | --- |
+| `./install.sh --jobs 4` | 调整 SDK/OSQP 编译并行度，默认 2 |
+| `./install.sh --skip-apt` | 系统和 ROS 依赖已准备好时跳过 apt/rosdep |
+| `./install.sh --skip-models` | 跳过已有策略文件下载 |
+| `./install.sh --with-tomography` | 额外装 Open3D/CuPy、拉取 PCD；运行需 CUDA 12 |
+| `./build.sh --jobs 4` | 调整项目单包编译并行度 |
+| `./build.sh --packages-up-to scan_planner` | 仅构建指定包及其工作区依赖 |
+
+下载缓存、SDK 源码和依赖构建在 `.deps/`；运行库在 `third_party/`。
+推理库与 SDK 压缩包有 SHA-256 校验；OSQP 固定为 0.6.3 的 commit。
+已有不同版本的推理库不会被自动覆盖。安装脚本不配置 NVIDIA 驱动或 CUDA Toolkit。
+普通使用不必手动执行下述步骤，以下保留为依赖与排障参考。
+
+## 系统依赖（手动参考）
 
 安装 ROS 2 Humble Desktop 和其软件源后，在本仓库目录执行：
 
@@ -17,7 +46,7 @@ sudo apt install git-lfs ros-dev-tools python3-rosdep python3-venv python3-pip \
   ros-humble-ros-gz ros-humble-ros2-control ros-humble-ros2-controllers \
   ros-humble-pcl-ros ros-humble-cv-bridge ros-humble-tf2-sensor-msgs \
   ros-humble-backward-ros ros-humble-rmw-fastrtps-cpp ros-humble-gtsam \
-  ros-humble-interactive-markers libignition-gazebo6-dev libignition-plugin1-dev
+  ros-humble-interactive-markers libignition-gazebo6-dev libignition-plugin-dev
 source /opt/ros/humble/setup.bash
 # 首次使用 rosdep 时执行 sudo rosdep init
 rosdep update
@@ -27,7 +56,7 @@ git lfs install --local
 git lfs pull --include="*.pt" --exclude=""
 ```
 
-`tools/build.sh` 和 `tools/env.sh` 拒绝已加载其他 ROS 发行版的终端。可选的
+`build.sh`（内部调用 `tools/build.sh`）和 `tools/env.sh` 拒绝已加载其他 ROS 发行版的终端。可选的
 `.deps/humble/opt/ros/humble` 是本地解压开发依赖的前缀；正常 apt 安装不需要它。
 
 ## 非 ROS 依赖
@@ -74,7 +103,7 @@ cmake --install third_party/osqp/build
 ## 编译和运行
 
 ```bash
-./tools/build.sh
+./build.sh
 source tools/env.sh
 ./tools/check_offline.sh
 IGN_IP=127.0.0.1 ros2 launch legbot_bringup simulation.launch.py gui:=true
@@ -83,7 +112,7 @@ IGN_IP=127.0.0.1 ros2 launch legbot_bringup simulation.launch.py gui:=true
 上述 `IGN_IP` 将本机仿真通信绑定回环；本次多网卡环境中默认地址导致实体创建服务超时。
 分布式 Gazebo 通信请改为对应网卡地址。
 
-`LEGBOT_BUILD_JOBS=2 ./tools/build.sh` 可调整单包编译并行度，内存不足时保持默认 1。
+`./build.sh --jobs 2` 可调整单包编译并行度，内存不足时使用 `--jobs 1`。
 `PCT_PYTHON=/usr/bin/python3` 可替代 `.venv-humble/bin/python3`，但必须是 Python 3.10。
 额外的制图依赖检查：`python3 tests/check_dependencies_offline.py --tomography`。
 仿真启动回归检查：`python3 tests/check_humble_sim.py`。此检查启动独立 DDS 域的无界面仿真，
