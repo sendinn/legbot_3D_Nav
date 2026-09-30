@@ -45,6 +45,7 @@ def transform_xyz(local, odom, building, spawn):
 class PctPathMission(Node):
     def __init__(self):
         super().__init__('pct_path_mission')
+        self.allow_retarget = bool(self.declare_parameter('allow_retarget', False).value)
         self.input_topic = str(self.declare_parameter(
             'input_topic', '/pct_path_raw').value)
         self.output_topic = str(self.declare_parameter(
@@ -115,6 +116,12 @@ class PctPathMission(Node):
         if not all(math.isfinite(value) for point in values for value in point):
             self.get_logger().error('Rejected PCT path containing non-finite coordinates')
             return
+        if msg.header.frame_id != self.pct_frame_id:
+            self.get_logger().error('Rejected path in unexpected frame')
+            return
+        if self.allow_retarget:
+            self.started = False
+            self.completed = False
         self.raw_path = msg
         self.get_logger().info('Received Building-local PCT path with %d poses' %
                                len(msg.poses))
@@ -151,7 +158,7 @@ class PctPathMission(Node):
                 source.pose.position.z,
             )
             points.append(transform_xyz(
-                local, self.initial_odom, self.building, self.spawn))
+                local, self.initial_odom if self.publish_map_tf else self.spawn, self.building, self.spawn))
 
         for index, point in enumerate(points):
             pose = PoseStamped()

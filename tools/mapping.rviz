@@ -1,0 +1,262 @@
+Panels:
+- Class: rviz_common/Displays
+  Help Height: 138
+  Name: Displays
+  Property Tree Widget:
+    Expanded:
+    - /Global planning (PCT)1
+    - /Local planning1
+    - /Robot sensing and state1
+    Splitter Ratio: 0.6495726704597473
+  Tree Height: 1754
+- Class: rviz_common/Selection
+  Name: Selection
+- Class: rviz_common/Tool Properties
+  Expanded: null
+  Name: Tool Properties
+  Splitter Ratio: 0.5
+- Class: rviz_common/Views
+  Expanded:
+  - /Current View1
+  Name: Views
+  Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Alpha: 0.3499999940395355
+    Cell Size: 1
+    Class: rviz_default_plugins/Grid
+    Color: 120; 120; 120
+    Enabled: true
+    Line Style:
+      Line Width: 0.029999999329447746
+      Value: Lines
+    Name: Ground grid
+    Normal Cell Count: 0
+    Offset:
+      X: 0
+      Y: 0
+      Z: 0
+    Plane: XY
+    Plane Cell Count: 40
+    Reference Frame: odom
+    Value: true
+  - Alpha: 1
+    Class: rviz_default_plugins/RobotModel
+    Collision Enabled: false
+    Description File: ''
+    Description Source: Topic
+    Description Topic:
+      Depth: 5
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /go2/robot_description
+    Enabled: true
+    Links:
+      All Links Enabled: true
+      Expand Joint Details: false
+      Expand Link Details: false
+      Expand Tree: false
+      Link Tree Style: Links in Alphabetic Order
+    Mass Properties:
+      Inertia: false
+      Mass: false
+    Name: GO2 robot
+    TF Prefix: ''
+    Update Interval: 0
+    Value: true
+    Visual Enabled: true
+  - Alpha: 1
+    Buffer Length: 1
+    Class: rviz_default_plugins/Path
+    Color: 255; 60; 40
+    Enabled: true
+    Head Diameter: 0.30000001192092896
+    Head Length: 0.20000000298023224
+    Length: 0.30000001192092896
+    Line Style: Billboards
+    Line Width: 0.11999999731779099
+    Name: PCT global path
+    Offset:
+      X: 0
+      Y: 0
+      Z: 0
+    Pose Color: 255; 85; 255
+    Pose Style: None
+    Radius: 0.029999999329447746
+    Shaft Diameter: 0.10000000149011612
+    Shaft Length: 0.10000000149011612
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /pct_path
+    Value: true
+  - Alpha: 0.75
+    Autocompute Intensity Bounds: true
+    Autocompute Value Bounds:
+      Max Value: 1.693450927734375
+      Min Value: -1.1038230657577515
+      Value: true
+    Axis: Z
+    Channel Name: intensity
+    Class: rviz_default_plugins/PointCloud2
+    Color: 255; 255; 255
+    Color Transformer: AxisColor
+    Decay Time: 0
+    Enabled: true
+    Invert Rainbow: false
+    Max Color: 255; 255; 255
+    Max Intensity: 4096
+    Min Color: 0; 0; 0
+    Min Intensity: 0
+    Name: Accumulated mapping cloud
+    Position Transformer: XYZ
+    Selectable: true
+    Size (Pixels): 2
+    Size (m): 0.02500000037252903
+    Style: Points
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /fast_lio/map
+    Use Fixed Frame: true
+    Use rainbow: true
+    Value: true
+  - Alpha: 1
+    Buffer Length: 1
+    Class: rviz_default_plugins/Path
+    Color: 40; 220; 90
+    Enabled: true
+    Head Diameter: 0.20000000298023224
+    Head Length: 0.15000000596046448
+    Length: 0.20000000298023224
+    Line Style: Lines
+    Line Width: 0.05000000074505806
+    Name: FAST-LIO estimated trajectory
+    Offset:
+      X: 0
+      Y: 0
+      Z: 0
+    Pose Color: 40; 220; 90
+    Pose Style: None
+    Radius: 0.019999999552965164
+    Shaft Diameter: 0.05000000074505806
+    Shaft Length: 0.07999999821186066
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /fast_lio/path
+    Value: true
+  - Angle Tolerance: 0.10000000149011612
+    Class: rviz_default_plugins/Odometry
+    Covariance:
+      Orientation:
+        Alpha: 0.5
+        Color: 255; 255; 127
+        Color Style: Unique
+        Frame: Local
+        Offset: 1
+        Scale: 1
+        Value: true
+      Position:
+        Alpha: 0.30000001192092896
+        Color: 204; 51; 204
+        Scale: 1
+        Value: true
+      Value: true
+    Enabled: false
+    Keep: 100
+    Name: FAST-LIO base odometry
+    Position Tolerance: 0.05000000074505806
+    Shape:
+      Alpha: 0.699999988079071
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.019999999552965164
+      Color: 255; 255; 0
+      Head Length: 0.07000000029802322
+      Head Radius: 0.03999999910593033
+      Shaft Length: 0.20000000298023224
+      Shaft Radius: 0.019999999552965164
+      Value: Arrow
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      Filter size: 10
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /fast_lio/odometry_base
+    Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 38; 38; 38
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+  - Class: rviz_default_plugins/Interact
+    Hide Inactive Objects: true
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  - Class: rviz_default_plugins/FocusCamera
+  - Class: rviz_default_plugins/Measure
+    Line color: 128; 128; 0
+  - Class: rviz_default_plugins/PublishPoint
+    Single click: true
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /scan/waypoint_delete
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 21.61775779724121
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 4.499490737915039
+        Y: -0.2139846384525299
+        Z: 0.7047340869903564
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.6050000786781311
+      Target Frame: odom
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 4.255032062530518
+    Saved: null
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 2166
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001f4000007d6fc0200000004fb000000100044006900730070006c0061007900730100000070000007d60000018600fffffffb0000001200530065006c0065006300740069006f006e00000001b70000006e000000b200fffffffb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000023c00000127000000b200fffffffb0000000a0056006900650077007300000002a1000000c20000013800ffffff00000600000007d600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 2048
+  X: 2048
+  Y: 64

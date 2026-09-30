@@ -33,4 +33,11 @@ install(TARGETS scan_planner_node scan_go2_cmd_adapter DESTINATION lib/${PROJECT
 install(PROGRAMS tools/keypoint_recorder_ros2.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME scan_keypoint_recorder)
+if(BUILD_TESTING)
+  enable_testing()
+  add_executable(global_traj_bounds_test test/global_traj_bounds_test.cpp
+    algorithm/bspline_opt/src/uniform_bspline.cpp)
+  ament_target_dependencies(global_traj_bounds_test rclcpp legbot_runtime)
+  add_test(NAME global_traj_bounds_test COMMAND global_traj_bounds_test)
+endif()
 ament_package()

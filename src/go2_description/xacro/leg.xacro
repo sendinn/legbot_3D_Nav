@@ -49,7 +49,7 @@
           <origin rpy="${PI} ${PI} 0" xyz="0 0 0"/>
         </xacro:if>
         <geometry>
-          <mesh filename="file://$(find go2_description)/meshes/hip.dae" scale="1 1 1"/>
+          <mesh filename="package://go2_description/meshes/hip.dae" scale="1 1 1"/>
         </geometry>
       </visual>
       <collision>
@@ -84,10 +84,10 @@
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <geometry>
           <xacro:if value="${mirror_dae == True}">
-            <mesh filename="file://$(find go2_description)/meshes/thigh.dae" scale="1 1 1"/>
+            <mesh filename="package://go2_description/meshes/thigh.dae" scale="1 1 1"/>
           </xacro:if>
           <xacro:if value="${mirror_dae == False}">
-            <mesh filename="file://$(find go2_description)/meshes/thigh_mirror.dae" scale="1 1 1"/>
+            <mesh filename="package://go2_description/meshes/thigh_mirror.dae" scale="1 1 1"/>
           </xacro:if>
         </geometry>
       </visual>
@@ -123,7 +123,7 @@
       <visual>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <geometry>
-          <mesh filename="file://$(find go2_description)/meshes/calf.dae" scale="1 1 1"/>
+          <mesh filename="package://go2_description/meshes/calf.dae" scale="1 1 1"/>
         </geometry>
       </visual>
       <collision>

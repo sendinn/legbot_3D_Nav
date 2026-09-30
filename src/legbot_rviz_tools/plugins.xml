@@ -1,0 +1,4 @@
+<library path="legbot_rviz_tools">
+<class name="legbot_rviz_tools/NavGoal3D" type="legbot_rviz_tools::NavGoal3D" base_class_type="rviz_common::Tool"><description>Select a 3D surface, drag heading, release to navigate.</description></class>
+<class name="legbot_rviz_tools/PoseEstimate3D" type="legbot_rviz_tools::PoseEstimate3D" base_class_type="rviz_common::Tool"><description>Publish a surface-based initial pose when a localization consumer is available.</description></class>
+</library>

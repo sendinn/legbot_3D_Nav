@@ -77,7 +77,10 @@ def setup(context):
         package='ros_gz_bridge', executable='parameter_bridge', output='screen',
         parameters=[{'use_sim_time': True}], arguments=bridge_arguments,
         remappings=bridge_remappings)
-    resource_path = os.path.join(share('legbot_bringup'), 'models')
+    resource_path = os.pathsep.join([
+        os.path.join(share('legbot_bringup'), 'models'),
+        os.path.dirname(share('go2_description')),
+    ])
     if os.environ.get('IGN_GAZEBO_RESOURCE_PATH'):
         resource_path += os.pathsep + os.environ['IGN_GAZEBO_RESOURCE_PATH']
     package_share = share('legbot_bringup')

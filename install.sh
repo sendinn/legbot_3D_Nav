@@ -88,6 +88,7 @@ PY
     ros-humble-desktop ros-humble-ros-gz ros-humble-ros2-control ros-humble-ros2-controllers \
     ros-humble-pcl-ros ros-humble-cv-bridge ros-humble-tf2-sensor-msgs \
     ros-humble-backward-ros ros-humble-rmw-fastrtps-cpp ros-humble-gtsam \
+    libaprutil1-dev ros-humble-joint-state-publisher ros-humble-joint-state-publisher-gui \
     ros-humble-interactive-markers
 fi
 [[ -f /opt/ros/humble/setup.bash ]] || { echo '缺少 ROS Humble，请取消 --skip-apt。' >&2; exit 1; }
@@ -96,7 +97,12 @@ source /opt/ros/humble/setup.bash
 set -u
 export LANG=C.UTF-8
 if ! $SKIP_APT; then
-  [[ -f /etc/ros/rosdep/sources.list.d/20-default.list ]] || sudo rosdep init
+  mkdir "$STAGING/rosdep"
+  download \
+    'https://mirrors.tuna.tsinghua.edu.cn/github-raw/ros/rosdistro/master/rosdep/sources.list.d/20-default.list' \
+    "$STAGING/rosdep/20-default.list"
+  export ROSDEP_SOURCE_PATH="$STAGING/rosdep"
+  export ROSDISTRO_INDEX_URL="${ROSDISTRO_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/rosdistro/index-v4.yaml}"
   rosdep update --rosdistro humble
   rosdep install --from-paths src --ignore-src --rosdistro humble -y
 fi
@@ -168,7 +174,8 @@ cmake -S "$OSQP" -B "$ROOT/.deps/build/osqp" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DUNITTESTS=OFF -DCMAKE_INSTALL_PREFIX="$ROOT/third_party/pct/install"
 cmake --build "$ROOT/.deps/build/osqp" --parallel "$JOBS"
 cmake --install "$ROOT/.deps/build/osqp"
-python3 -m venv --system-site-packages .venv-humble
+# ROS apt packages are installed for Ubuntu's Python, even when Conda is active.
+/usr/bin/python3 -m venv --system-site-packages .venv-humble
 .venv-humble/bin/python3 -c 'import numpy, scipy, rclpy'
 if $TOMOGRAPHY; then
   .venv-humble/bin/python3 -m pip install -r src/pct_planner/requirements.txt

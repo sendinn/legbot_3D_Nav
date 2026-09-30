@@ -27,4 +27,5 @@
 <depend>control_input_msgs</depend>
 <depend>tf2_sensor_msgs</depend>
 <exec_depend>pct_planner</exec_depend><exec_depend>scan_planner</exec_depend><exec_depend>ego_planner</exec_depend><exec_depend>fast_lio</exec_depend><exec_depend>gz_quadruped_hardware</exec_depend><exec_depend>rl_quadruped_controller</exec_depend>
-<export><build_type>ament_cmake</build_type></export></package>
+<export><build_type>ament_cmake</build_type></export>  <exec_depend>legbot_rviz_tools</exec_depend>
+</package>

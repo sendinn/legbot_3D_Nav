@@ -23,6 +23,9 @@ def include(package, launch_file, arguments=None, condition=None):
 def setup(context):
     navigation_source = LaunchConfiguration('navigation_source').perform(context)
     use_ground_truth = navigation_source == 'ground_truth'
+    interactive = LaunchConfiguration('interactive').perform(context) == 'true'
+    if interactive and not use_ground_truth:
+        raise RuntimeError('Interactive Building targets currently require ground_truth localization')
     gui = LaunchConfiguration('gui')
     rviz = LaunchConfiguration('rviz')
     spawn_x = LaunchConfiguration('spawn_x')
@@ -37,7 +40,7 @@ def setup(context):
         sensor_pose_topic = '/go2/lidar_pose'
         localization_label = 'Gazebo ground truth'
         rviz_config = os.path.join(
-            share('legbot_bringup'), 'rviz', 'scan_stairs_demo.rviz')
+            share('legbot_bringup'), 'rviz', 'scan_crossfloor.rviz')
     else:
         odom_topic = '/fast_lio/odometry_base'
         cloud_topic = '/fast_lio/cloud_registered'
@@ -80,6 +83,10 @@ def setup(context):
             'tomogram': 'building2_9',
             'path_topic': '/pct_path_raw',
             'frame_id': 'building_pct',
+            'interactive': LaunchConfiguration('interactive'),
+            'goal_x': LaunchConfiguration('goal_x'),
+            'goal_y': LaunchConfiguration('goal_y'),
+            'goal_z': LaunchConfiguration('goal_z'),
         }),
         include('legbot_bringup', 'scan.launch.py', {
             'use_sim_time': use_sim_time,
@@ -106,6 +113,7 @@ def setup(context):
             output='screen',
             parameters=[{
                 'use_sim_time': ParameterValue(use_sim_time, value_type=bool),
+                'allow_retarget': interactive,
                 'input_topic': '/pct_path_raw',
                 'output_topic': '/pct_path',
                 'goal_topic': '/scan/goal',
@@ -148,6 +156,10 @@ def setup(context):
 
 def generate_launch_description():
     return LaunchDescription([
+        DeclareLaunchArgument('interactive', default_value='false'),
+        DeclareLaunchArgument('goal_x', default_value='2.0'),
+        DeclareLaunchArgument('goal_y', default_value='-3.0'),
+        DeclareLaunchArgument('goal_z', default_value='4.5'),
         DeclareLaunchArgument('gui', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_sim_time', default_value='true', choices=['true', 'false']),

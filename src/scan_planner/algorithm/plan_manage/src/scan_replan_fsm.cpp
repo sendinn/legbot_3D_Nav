@@ -1024,6 +1024,9 @@ namespace scan_planner
       return false;
     }
 
+    // The refreshed reference has a new time origin and may be shorter.
+    // Progress on the previous reference is not meaningful on this one.
+    reference_progress_time_ = 0.0;
     if (!checkGlobalTargetOccupancy())
       return false;
 
@@ -1252,9 +1255,9 @@ namespace scan_planner
     double t_step = max_vel > 1e-6 ? planning_horizon_ / 20.0 / max_vel : 0.01;
     t_step = std::max(t_step, 0.01);
 
-    double t_proj = reference_progress_time_;
+    double t_proj = std::clamp(reference_progress_time_, 0.0, duration);
     double min_dist_to_start = 9999.0;
-    const double search_start = std::max(0.0, reference_progress_time_ - 0.2);
+    const double search_start = std::max(0.0, t_proj - 0.2);
     for (double t = search_start; t < duration; t += t_step)
     {
       Eigen::Vector3d pos_t = projectedReference(
@@ -1269,7 +1272,7 @@ namespace scan_planner
         t_proj = t;
       }
     }
-    t_proj = std::max(reference_progress_time_, t_proj);
+    t_proj = std::clamp(std::max(reference_progress_time_, t_proj), 0.0, duration);
     reference_progress_time_ = t_proj;
     double target_t = duration;
     double total_dist = 0.0;

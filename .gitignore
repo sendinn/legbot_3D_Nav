@@ -27,3 +27,6 @@ __pycache__/
 !/data/routes/.gitkeep
 
 /.venv-humble/
+
+# Generated mapping sessions
+/maps/

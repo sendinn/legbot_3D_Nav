@@ -8,7 +8,10 @@ from rclpy.utilities import remove_ros_args
 from rclpy.qos import QoSProfile, DurabilityPolicy
 rclpy.init()
 node = rclpy.create_node('pct_planner')
-from nav_msgs.msg import Path
+from nav_msgs.msg import Path, Odometry
+from std_msgs.msg import Bool
+from rclpy.qos import qos_profile_sensor_data
+import time
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs_py.point_cloud2 as pc2
 from std_msgs.msg import Header
@@ -17,7 +20,7 @@ from utils import *
 from planner_wrapper import TomogramPlanner
 
 
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import *
 from geometry_msgs.msg import PointStamped
 from interactive_markers.menu_handler import *
@@ -33,6 +36,7 @@ parser.add_argument('--start', type=float, nargs=3, metavar=('X', 'Y', 'Z'))
 parser.add_argument('--goal', type=float, nargs=3, metavar=('X', 'Y', 'Z'))
 parser.add_argument('--path-topic', default='/pct_path')
 parser.add_argument('--frame-id', default='building_pct')
+parser.add_argument('--interactive', choices=['true', 'false'], default='false')
 parser.add_argument('--optimize', action='store_true',
                     help='Use experimental GPMP optimization instead of the stable PCT A* route')
 args = parser.parse_args(remove_ros_args(sys.argv)[1:])
@@ -166,6 +170,9 @@ def plan_callback():  # 关键修改：添加event参数接收TimerEvent
     """定时器回调函数：执行路径规划并发布"""
     global last_planned_end_pos, last_planned_start_pos,end_pos, start_pos, plan_timer
 
+    if args.interactive == 'true':
+        return
+
     # 检查位置是否发生变化（考虑浮点数精度）
     position_changed = True
     if last_planned_start_pos is not None and last_planned_end_pos is not None:
@@ -203,6 +210,147 @@ def processFeedback(feedback):
         start_pos = np.array([p.x, p.y, p.z-0.5], dtype=np.float32)
     elif feedback.marker_name=="end_pos":
         end_pos = np.array([p.x, p.y, p.z-0.5], dtype=np.float32)
+
+
+# Interactive mode plans only after an explicit RViz menu selection.
+robot_position = None
+robot_seen = 0.0
+navigation_ready = False
+draft_goal = end_pos.copy()
+
+def receive_robot(msg):
+    global robot_position, robot_seen
+    p = msg.pose.pose.position
+    if msg.header.frame_id != 'odom' or not np.isfinite([p.x, p.y, p.z]).all():
+        return
+    robot_position = np.array([p.x - 13.0, p.y, p.z], dtype=np.float32)
+    robot_seen = time.monotonic()
+
+def receive_ready(msg):
+    global navigation_ready
+    navigation_ready = bool(msg.data)
+
+def edit_target(feedback):
+    global draft_goal
+    if feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE:
+        p = feedback.pose.position
+        if np.isfinite([p.x, p.y, p.z]).all():
+            draft_goal = np.array([p.x, p.y, p.z], dtype=np.float32)
+
+def place_target(msg):
+    global draft_goal
+    p = msg.point
+    xyz = np.array([p.x, p.y, p.z], dtype=np.float32)
+    if not np.isfinite(xyz).all():
+        return
+    if msg.header.frame_id == 'odom':
+        xyz[0] -= 13.0
+    elif msg.header.frame_id != args.frame_id:
+        node.get_logger().error('Select a point in odom or building_pct')
+        return
+    draft_goal = xyz
+    show_target()
+    node.get_logger().info('Draft XYZ=%s; right-click sphere -> Execute target' % draft_goal)
+
+def receive_nav_goal(msg):
+    p = msg.pose.position
+    xyz = np.array([p.x, p.y, p.z], dtype=np.float32)
+    if not np.isfinite(xyz).all():
+        goal_status('INVALID GOAL: non-finite coordinates', True)
+        return
+    if msg.header.frame_id not in ('odom', args.frame_id):
+        goal_status('INVALID FRAME: use odom or building_pct in RViz', True)
+        return
+    point = PointStamped()
+    point.header = msg.header
+    point.point.x, point.point.y, point.point.z = float(p.x), float(p.y), float(p.z)
+    place_target(point)
+    execute_target(None)
+
+def inside_map(point):
+    idx = planner.pos2idx(point[:2]).astype(int)
+    return 0 <= idx[1] < planner.map_dim[0] and 0 <= idx[0] < planner.map_dim[1]
+
+def goal_status(text, error=False):
+    marker = server.get('goal_3d')
+    if marker is not None:
+        marker.description = text
+        server.insert(marker, feedback_callback=edit_target)
+        goal_menu.apply(server, marker.name)
+        server.applyChanges()
+    if error:
+        node.get_logger().error(text)
+    else:
+        node.get_logger().info(text)
+
+def execute_target(feedback):
+    if not navigation_ready or robot_position is None or time.monotonic() - robot_seen > 2.0:
+        goal_status('NOT READY: wait for robot/localization, then execute again', True)
+        return
+    target = draft_goal.copy()
+    if not inside_map(target):
+        goal_status('OUTSIDE MAP: select a point on the Building map', True)
+        return
+    source = robot_position.copy()
+    if not inside_map(source):
+        # The west staging area connects through the established ground-floor entrance.
+        west_edge = planner.center[0] - planner.map_dim[0] // 2 * planner.resolution
+        if source[0] >= west_edge or abs(source[2] - 0.5) > 1.0:
+            goal_status('ROBOT OUTSIDE MAP: cannot connect to the entrance', True)
+            return
+        source = np.asarray(default_start, dtype=np.float32)
+    try:
+        layer = planner.match_best_layer(*target)
+        index = planner.pos2idx(target[:2]).astype(int)
+        cost = float(planner.tomogram[0, layer, index[1], index[0]])
+        if not np.isfinite(cost) or cost >= 20.0:
+            raise RuntimeError('BLOCKED TARGET: pick walkable floor, away from walls/edges')
+        goal_status('PLANNING: finding a stair route...')
+        route = planner.plan(source, target, optimize=args.optimize)
+        if route is None or len(route) < 2 or not np.isfinite(route).all():
+            raise RuntimeError('No traversable route')
+        # Reject a silently snapped destination on the wrong floor.
+        if np.linalg.norm(route[-1, :2] - target[:2]) > 0.75 or abs(route[-1, 2] - 0.5 - target[2]) > max(planner.slice_dh, 0.75):
+            raise RuntimeError('Selected height does not match a reachable floor')
+        stamp = node.get_clock().now().to_msg()
+        path_pub.publish(traj2ros(route, args.frame_id, stamp))
+        goal_status('GOAL SENT: robot following route; drag to choose next goal')
+        node.get_logger().info('Interactive goal executed: target=%s route_points=%d' % (target, len(route)))
+    except Exception as error:
+        goal_status('Goal not sent: %s' % error, True)
+
+def show_target():
+    marker = InteractiveMarker()
+    marker.header.frame_id = args.frame_id
+    marker.name = 'goal_3d'
+    marker.description = '3D GOAL: drag XYZ; right-click > Execute target'
+    marker.scale = 2.0
+    marker.pose.position = Point(x=float(draft_goal[0]), y=float(draft_goal[1]), z=float(draft_goal[2]))
+    marker.pose.orientation.w = 1.0
+    control = InteractiveMarkerControl()
+    control.name = 'menu'
+    control.interaction_mode = InteractiveMarkerControl.MENU
+    control.always_visible = True
+    sphere = Marker()
+    sphere.type = Marker.SPHERE
+    sphere.pose.orientation.w = 1.0
+    sphere.scale.x = sphere.scale.y = sphere.scale.z = 0.45
+    sphere.color.r, sphere.color.g, sphere.color.a = 1.0, 0.5, 1.0
+    control.markers.append(sphere)
+    marker.controls.append(control)
+    for name, xyz in [('X', (1., 0., 0.)), ('Y', (0., 0., 1.)), ('Z', (0., 1., 0.))]:
+        control = InteractiveMarkerControl()
+        control.name = 'move_' + name
+        control.orientation.w = 1.0
+        control.orientation.x, control.orientation.y, control.orientation.z = xyz
+        normalizeQuaternion(control.orientation)
+        control.orientation_mode = InteractiveMarkerControl.FIXED
+        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
+        marker.controls.append(control)
+    server.insert(marker, feedback_callback=edit_target)
+    goal_menu.apply(server, marker.name)
+    server.applyChanges()
+
 
 def normalizeQuaternion( quaternion_msg ):
     norm = quaternion_msg.x**2 + quaternion_msg.y**2 + quaternion_msg.z**2 + quaternion_msg.w**2
@@ -331,8 +479,21 @@ def pct_plan():
     # static clouds continuously: doing so steals CPU/DDS bandwidth from SCAN.
     cloud_timer = node.create_timer(0.5, publish_clouds_when_rviz_is_ready)
 
-    make6DofMarker(start_pos,"start_pos", show_6dof=True)
-    make6DofMarker(end_pos, "end_pos",show_6dof=True)
+    if args.interactive == 'true':
+        global goal_menu, interactive_subscriptions
+        goal_menu = MenuHandler()
+        goal_menu.insert('Execute target / 执行目标', callback=execute_target)
+        interactive_subscriptions = [
+            node.create_subscription(Odometry, '/Odometry_gazebo', receive_robot, qos_profile_sensor_data),
+            node.create_subscription(Bool, '/go2/demo_ready', receive_ready,
+                QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)),
+            node.create_subscription(PointStamped, '/pct/goal_pick', place_target, 10),
+            node.create_subscription(PoseStamped, '/pct/nav_goal', receive_nav_goal, 10)]
+        show_target()
+        node.get_logger().info('RViz interactive mode: waiting for Execute target; no automatic mission')
+    else:
+        make6DofMarker(start_pos,"start_pos", show_6dof=True)
+        make6DofMarker(end_pos, "end_pos",show_6dof=True)
     
     # print("初始目标位置", end_pos)
     

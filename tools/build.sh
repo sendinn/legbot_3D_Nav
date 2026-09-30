@@ -22,7 +22,23 @@ if [[ -d "$legbot_dep_prefix" ]]; then
 fi
 export MAKEFLAGS="-j${LEGBOT_BUILD_JOBS:-1}"
 export CMAKE_BUILD_PARALLEL_LEVEL="${LEGBOT_BUILD_JOBS:-1}"
-colcon build --base-paths src --executor sequential "$@" --cmake-args \
+colcon_path_args=()
+# Humble's rosidl CMake reads generated path lists as ASCII strings.
+if printf '%s' "$PWD" | LC_ALL=C grep -q '[^ -~]'; then
+  custom_build_base=false
+  for arg in "$@"; do
+    case "$arg" in
+      --build-base|--build-base=*) custom_build_base=true ;;
+    esac
+  done
+  if ! $custom_build_base; then
+    workspace_hash="$(printf '%s' "$PWD" | sha256sum)"
+    workspace_hash="${workspace_hash%% *}"
+    colcon_path_args=(--build-base "${XDG_CACHE_HOME:-$HOME/.cache}/legbot-colcon/${workspace_hash:0:16}")
+    printf 'ROS IDL build directory: %s\n' "${colcon_path_args[1]}"
+  fi
+fi
+colcon build --base-paths src --executor sequential "${colcon_path_args[@]}" "$@" --cmake-args \
   -DPython3_EXECUTABLE=/usr/bin/python3 \
   -DPYTHON_EXECUTABLE=/usr/bin/python3 \
   -DCMAKE_BUILD_TYPE=Release \

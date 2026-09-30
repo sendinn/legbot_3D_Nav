@@ -9,10 +9,20 @@ cd "$ROOT"
 GUI=true
 RVIZ=true
 CHECK=false
+CROSS_FLOOR=false
+INTERACTIVE_3D=false
+GOAL_X=2.0
+GOAL_Y=-3.0
+GOAL_Z=4.5
 GAZEBO_RENDERING=auto
 RVIZ_RENDERING=auto
 while (($#)); do
   case "$1" in
+    --3d) CROSS_FLOOR=true; INTERACTIVE_3D=true; shift ;;
+    --upstairs) CROSS_FLOOR=true; INTERACTIVE_3D=false; shift ;;
+    --goal3d)
+      [[ $# -ge 4 ]] || { echo '--goal3d 需要 X Y Z 三个坐标' >&2; exit 2; }
+      CROSS_FLOOR=true; INTERACTIVE_3D=false; GOAL_X="$2"; GOAL_Y="$3"; GOAL_Z="$4"; shift 4 ;;
     --headless) GUI=false; RVIZ=false; shift ;;
     --no-rviz) RVIZ=false; shift ;;
     --no-gazebo-gui) GUI=false; shift ;;
@@ -28,7 +38,13 @@ while (($#)); do
     -h|--help)
       cat <<'HELP'
 用法：./simulation.sh [--headless] [--no-gazebo-gui] [--no-rviz] [--software-rendering] [--check]
-默认启动 Gazebo GUI、FAST-LIO、SCAN、站立状态机、航点入口和 RViz。
+--3d  RViz 工具栏 3D Nav Goal：按住楼层点云、拖动方向、松开发送目标
+--upstairs  启动 PCT 跨楼层模式，默认楼上目标 [2, -3, 4.5]
+--goal3d X Y Z  指定 building_pct 楼栋地图中的三维目标（米），自动启用跨层模式
+跨层模式使用 Gazebo 真值定位和预建 building2_9 地图，按楼梯路径导航。
+坐标属于 building_pct；Gazebo 世界坐标为 [X+13, Y, Z]，不是 FAST-LIO odom。
+目标需落在该地图可通行区域。启动后执行一次任务，修改目标需重新启动。
+不带跨层参数时启动 Gazebo GUI、FAST-LIO、SCAN、站立状态机、航点入口和 RViz。
 --headless  关闭 Gazebo GUI 和 RViz，仍保留激光雷达与完整导航链路
 --no-gazebo-gui  关闭 Gazebo 窗口，保留 RViz 和完整导航（低负载调试）
 --no-rviz   仅关闭 RViz
@@ -105,7 +121,7 @@ flock -n 9 || { echo '本工作区已有 simulation.sh 在运行，请先退出�
 
 # 使用 Python 管理进程和 ROS 服务等待，避免依靠固定 sleep 猜测控制器已启动。
 # 每个 ros2 launch 独占进程组，退出时仅清理本脚本记录的组，不使用全局 pkill。
-exec python3 - "$GUI" "$RVIZ" "$CHECK" "$GAZEBO_RENDERING" "$RVIZ_RENDERING" <<'PY'
+exec python3 - "$GUI" "$RVIZ" "$CHECK" "$GAZEBO_RENDERING" "$RVIZ_RENDERING" "$CROSS_FLOOR" "$GOAL_X" "$GOAL_Y" "$GOAL_Z" "$INTERACTIVE_3D" <<'PY'
 import datetime
 import math
 import os
@@ -115,12 +131,23 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, str(Path.cwd() / 'tools'))
+from simulation_cleanup import cleanup_partition
+
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from controller_manager_msgs.srv import ListControllers
 
 gui, rviz, check = (arg == 'true' for arg in sys.argv[1:4])
 gazebo_rendering, rviz_rendering = sys.argv[4:6]
+cross_floor = sys.argv[6] == 'true'
+interactive_3d = sys.argv[10] == 'true'
+try:
+    goal = tuple(float(value) for value in sys.argv[7:10])
+    if len(goal) != 3 or not all(math.isfinite(value) for value in goal):
+        raise ValueError
+except ValueError:
+    sys.exit('--goal3d 坐标必须为三个有限数字')
 try:
     domain = int(os.environ['ROS_DOMAIN_ID'])
     timeout = float(os.environ.get('LEGBOT_SIM_START_TIMEOUT', '120'))
@@ -130,6 +157,7 @@ except ValueError:
     sys.exit('DDS 域必须是 0～232 的整数，启动超时必须是有限正数。')
 share = Path(get_package_share_directory('legbot_bringup'))
 launches = {
+    'crossfloor': 'pct_cross_floor_demo.launch.py',
     'simulation': 'simulation.launch.py',
     'control': 'go2_demo_control.launch.py',
     'fastlio': 'fastlio.launch.py',
@@ -141,6 +169,10 @@ config = share / 'config/fastlio_sim.yaml'
 for path in [config, *(share / 'launch' / name for name in launches.values())]:
     if not path.is_file():
         sys.exit(f'缺少 {path}，请先执行 ./build.sh')
+if cross_floor:
+    result = subprocess.run(['ros2', 'run', 'pct_planner', 'pct_plan', '--check-libraries'])
+    if result.returncode:
+        sys.exit('PCT 依赖检查失败，请检查 pct_planner 构建')
 if check:
     print('PASS 环境、控制器消息和导航启动文件检查；未启动仿真。')
     sys.exit(0)
@@ -166,7 +198,7 @@ def rendering_environment(mode):
 def start(name, *arguments):
     path = log_dir / f'{name}.log'
     env = None
-    if name == 'simulation':
+    if name in ('simulation', 'crossfloor'):
         env = rendering_environment(gazebo_rendering)
     elif name == 'rviz':
         env = rendering_environment(rviz_rendering)
@@ -231,6 +263,26 @@ try:
         raise RuntimeError(
             f'DDS 域 {domain} 已有 controller_manager，可能存在旧仿真。'
             '请退出旧实例，或设置 LEGBOT_SIM_DOMAIN_ID 为另一个空闲域后重试；未启动新仿真。')
+    if cross_floor:
+        start('crossfloor', f'gui:={str(gui).lower()}', 'rviz:=false',
+              'navigation_source:=ground_truth', f'interactive:={str(interactive_3d).lower()}',
+              f'goal_x:={goal[0]}', f'goal_y:={goal[1]}', f'goal_z:={goal[2]}')
+        if rviz:
+            start('rviz', 'use_sim_time:=true',
+                  f'config:={share / "rviz/scan_crossfloor.rviz"}')
+        print('RViz 操作：选择 3D Nav Goal，在楼层点云按下鼠标并拖动方向，松开即规划执行。' if interactive_3d else '自动目标模式。')
+        if not interactive_3d:
+            print(f'跨楼层模式：building_pct 目标 {goal}；Gazebo 世界目标 {(goal[0]+13, goal[1], goal[2])}。')
+        print('等待 RViz 3D Nav Goal 目标。按 Ctrl+C 停止。' if interactive_3d else '等待 PCT 规划和起身完成。按 Ctrl+C 停止。')
+        print(f'路径与执行状态：tail -f {log_dir}/crossfloor.log')
+        announced = False
+        while True:
+            check_processes()
+            if not announced and 'PCT cross-floor mission started:' in (log_dir / 'crossfloor.log').read_text(errors='replace'):
+                print('PCT 三维参考路径已接入 SCAN，开始跨楼层任务。')
+                announced = True
+            time.sleep(1)
+
     # 第一步只启动 Gazebo 和机器人。默认 FAST-LIO 导航，保留激光雷达，禁用真值替代定位。
     start('simulation', f'gui:={str(gui).lower()}', 'headless_rendering:=true',
           'enable_lidar:=true', 'navigation_source:=fastlio', 'publish_ground_truth:=false')
@@ -291,5 +343,8 @@ finally:
         stop(process)
     if processes:
         stop(processes[0][1])
+    detached = cleanup_partition(os.environ['IGN_PARTITION'])
+    if detached:
+        print(f'已清理脱离进程组的本次仿真进程：{detached}')
     print(f'本次启动的进程已清理。日志保留在：{log_dir.resolve()}')
 PY
