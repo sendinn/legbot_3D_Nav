@@ -13,7 +13,7 @@ set -u
 export ROS_DOMAIN_ID="${LEGBOT_SIM_DOMAIN_ID:-178}"
 export ROS_LOCALHOST_ONLY=1
 export IGN_IP=127.0.0.1
-export IGN_PARTITION="legbot_mapping_${ROS_DOMAIN_ID}_$$"
+export IGN_PARTITION="${LEGBOT_MAPPING_PARTITION:-legbot_mapping_${ROS_DOMAIN_ID}_$$}"
 export PYTHONUNBUFFERED=1
 for arg in "$@"; do
   if [[ "$arg" == --check ]]; then

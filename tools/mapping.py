@@ -33,6 +33,7 @@ def arguments(argv=None):
         epilog='W/S 前后，A/D 横移，Q/E 转向，空格/X 停止，P 保存，Esc 或 Ctrl+C 保存退出。'
                '松开移动键后 0.5 秒内自动归零。默认 maps/<时间戳-PID>/map.pcd。')
     parser.add_argument('--headless', action='store_true', help='关闭 Gazebo GUI 和 RViz')
+    parser.add_argument('--web-socket', type=Path, help='网页控制使用的本机 Unix socket；替代终端按键')
     parser.add_argument('--no-rviz', action='store_true')
     parser.add_argument('--no-gazebo-gui', action='store_true')
     parser.add_argument('--check', action='store_true', help='仅检查环境，不启动仿真')
@@ -169,7 +170,7 @@ def main(argv=None):
     if args.check:
         print('PASS 建图环境、ROS 消息、服务和启动文件检查；未启动仿真。')
         return 0
-    if not sys.stdin.isatty() and args.duration is None:
+    if not sys.stdin.isatty() and args.duration is None and args.web_socket is None:
         raise ValueError('键盘扫图需要交互终端；SSH 请使用 ssh -t。无交互静止采样可指定 --duration 秒数。')
     common_mode = 'software' if args.software_rendering else ('gpu' if args.gpu_rendering else None)
     gazebo_mode = choose_rendering('Gazebo', args.gazebo_rendering or common_mode, 'gpu', False)
@@ -210,6 +211,7 @@ def main(argv=None):
     saved = False
     command = KeyboardCommand(args.speed, args.turn_speed)
     observed = {'odom': -math.inf, 'cloud': -math.inf, 'frame': '', 'points': 0}
+    web = None
 
     def start(name, launch, *extra, mode=None):
         with (log_dir / f'{name}.log').open('w') as stream:
@@ -293,6 +295,8 @@ def main(argv=None):
                     'source': 'FAST-LIO simulation', 'ros_domain_id': domain}
         (output / 'map.json').write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + '\n')
         saved = True
+        if web:
+            web.update(saved_path=str(output / 'map.pcd'), saved_at=metadata['saved_at'], points=points)
         print(f'地图已保存：{output / "map.pcd"}（{points} 点，坐标系 {observed["frame"]}）')
 
     def interrupted(signum, frame):
@@ -300,6 +304,10 @@ def main(argv=None):
 
     signal.signal(signal.SIGTERM, interrupted)
     try:
+        if args.web_socket:
+            from mapping_control import MappingControl
+            web = MappingControl(args.web_socket)
+            web.update(output=str(output), log_dir=str(log_dir), domain=domain)
         # Keep the ROS context alive on Ctrl+C so saving can finish first.
         rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
         node = rclpy.create_node('legbot_mapping_keyboard')
@@ -349,15 +357,27 @@ def main(argv=None):
                 raise RuntimeError('FAST-LIO 定位或地图就绪超时')
         spin_for(1.0, mode=3)
         ready = True
+        if web:
+            web.update(phase='ready')
         print('建图就绪：W/S 前后，A/D 横移，Q/E 转向，空格/X 停止，P 保存，Esc/Ctrl+C 保存退出。')
         print('请让终端保持焦点；持续按移动键，松开后 0.5 秒内归零。')
-        if sys.stdin.isatty():
+        if sys.stdin.isatty() and web is None:
             terminal = termios.tcgetattr(sys.stdin.fileno())
             termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
             tty.setcbreak(sys.stdin.fileno())
         deadline = time.monotonic() + args.duration if args.duration else math.inf
         while time.monotonic() < deadline:
             check_processes()
+            if web:
+                (key, received), save = web.take()
+                # Use receipt time, so a disconnected browser cannot extend a command.
+                command.press(key, received)
+                if save:
+                    try:
+                        save_map()
+                        web.update(phase='ready', error=None)
+                    except Exception as error:
+                        web.update(phase='ready', error=str(error))
             if terminal is not None and select.select([sys.stdin], [], [], 0)[0]:
                 key = os.read(sys.stdin.fileno(), 1).decode(errors='ignore')
                 if not key or key == '\x1b':
@@ -377,9 +397,13 @@ def main(argv=None):
     except KeyboardInterrupt:
         print('\n停止移动，正在保存并退出……')
     except Exception as error:
+        if web:
+            web.update(phase='failed', error=str(error))
         print(f'建图失败：{error}', file=sys.stderr)
         exit_code = 1
     finally:
+        if web:
+            web.update(phase='stopping')
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         if terminal is not None:
@@ -409,6 +433,8 @@ def main(argv=None):
         if rclpy.ok():
             rclpy.shutdown()
         print(f'本次建图进程已清理。日志：{log_dir}')
+        if web:
+            web.close()
     return exit_code
 
 
