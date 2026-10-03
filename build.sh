@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-JOBS="${LEGBOT_BUILD_JOBS:-2}"
+source "$ROOT/tools/native_platform.sh"
+JOBS="${LEGBOT_BUILD_JOBS:-$LEGBOT_DEFAULT_JOBS}"
 ARGS=()
 while (($#)); do
   case "$1" in
@@ -10,7 +11,7 @@ while (($#)); do
       JOBS="$2"; shift 2 ;;
     -h|--help)
       echo '用法：./build.sh [--jobs N] [--packages-select 包...] [--packages-up-to 包...]'
-      echo '默认增量编译全部包，按包顺序执行，单包默认 2 线程；其他参数透传 colcon。'
+      echo '原生 ARM64/x86_64 构建；逐包编译，单包默认 ARM64 1 线程、x86_64 2 线程。其他参数透传 colcon。'
       exit 0 ;;
     *) ARGS+=("$1"); shift ;;
   esac

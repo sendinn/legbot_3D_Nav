@@ -7,7 +7,7 @@
 
 ## 新机器两步安装
 
-在 Ubuntu 22.04 x86_64 上，用普通用户在当前 `humble` 工作区执行：
+在 Ubuntu 22.04 x86_64 或 ARM64 上，用普通用户在当前 `humble` 工作区执行：
 
 ```bash
 ./install.sh
@@ -18,7 +18,7 @@ source tools/env.sh
 
 无需预先安装 ROS；安装脚本按 [ROS 官方流程](https://github.com/ros2/ros2_documentation/blob/humble/source/Installation/Ubuntu-Install-Debs.rst)
 检查软件源，缺失时获取官方 `ros2-apt-source` 安装包，再安装 Humble Desktop 与依赖。
-需要联网和 sudo 权限；不要用 sudo 执行整个脚本。当前不支持 ARM64 或 Ubuntu 24.04。
+需要联网和 sudo 权限；不要用 sudo 执行整个脚本。支持原生 ARM64（aarch64），不支持 ARM32、交叉编译或 Ubuntu 24.04。
 
 | 选项 | 作用 |
 | --- | --- |
@@ -63,7 +63,7 @@ git lfs pull --include="*.pt" --exclude=""
 
 所有大型下载和编译产物放在 Git 忽略的 `third_party/` 下。
 
-- LibTorch：本次使用官方 CPU **2.5.1，C++11 ABI**，解压为 `third_party/libtorch`。
+- LibTorch：x86_64 使用官方 CPU **2.5.1，C++11 ABI**，解压为 `third_party/libtorch`。
   [下载](https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip)。
 - ONNX Runtime：官方 Linux x64 **1.23.2**，解压并去掉版本目录，放入
   `third_party/onnxruntime`。[下载](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz)。
@@ -149,3 +149,38 @@ IGN_IP=127.0.0.1 ros2 launch legbot_bringup simulation.launch.py gui:=true
 
 父仓库的 `.gitmodules` 指向 `humble`。在远端发布这个分支之前，其他克隆不能通过
 `git submodule update --remote` 获取本次适配；本次仅整理本地分支和提交。
+
+
+## ARM64 安装与验证
+
+```bash
+./install.sh --jobs 1
+./build.sh --jobs 1
+source tools/env.sh
+./mapping.sh --check
+```
+
+ARM64 安装器使用 PyTorch 官方 CPU 2.6.0 的 CPython 3.10 / manylinux_2_28 aarch64 wheel，保留完整 wheel 目录，并在 `third_party/libtorch` 下建立 `lib`、`include`、`share` 相对链接。它只提取 C++ 部署库，不向系统 Python 安装 torch，也不替换 JetPack 的 Python/CUDA 包。`torch.libs` 必须保留，`tools/env.sh` 和构建脚本会将其加入动态库搜索路径。
+
+版本选择原因：官方 2.5.1 ARM64 wheel 使用 `_GLIBCXX_USE_CXX11_ABI=0`，而此工程链接 ROS 系统库需要 ABI=1；2.6.0 ARM64 CPU wheel 已使用 ABI=1。ONNX Runtime 使用官方 1.23.2 Linux aarch64 发布包。两个下载均固定 SHA-256，来源为 [PyTorch 官方索引](https://download.pytorch.org/whl/cpu/torch/) 和 [ONNX Runtime 官方发布](https://github.com/microsoft/onnxruntime/releases/tag/v1.23.2)。
+
+不能把其他架构的 `third_party`、`build`、`install` 直接复制到 ARM64。安装器遇到不匹配的现有库会退出，不覆盖用户目录；请自行确认并备份/移走旧依赖后重装。SDK/OSQP 的构建缓存按架构隔离。
+
+离线平台检测测试：
+
+```bash
+python3 tests/check_native_platform.py
+```
+
+安装依赖后，可独立验证 C++ ABI、Torch 运算和默认 ONNX 策略推理，不启动机器人：
+
+```bash
+export LD_LIBRARY_PATH="$PWD/third_party/libtorch/lib:$PWD/third_party/libtorch/torch.libs:$PWD/third_party/onnxruntime/lib:${LD_LIBRARY_PATH:-}"
+cmake -S tests/native_runtime_smoke -B .deps/build/native_runtime_smoke \
+  -DCMAKE_PREFIX_PATH="$PWD/third_party/libtorch" \
+  -DONNXRUNTIME_ROOT="$PWD/third_party/onnxruntime"
+cmake --build .deps/build/native_runtime_smoke --parallel 1
+.deps/build/native_runtime_smoke/native_smoke src/go2_description/config/moe_cts_77k/policy.onnx
+```
+
+`--with-tomography` 仍按 requirements 安装 Open3D/CuPy；CUDA 版本和 GPU 可用性需单独验证。安装器不负责升级 JetPack/CUDA。库级测试通过不等于整个 ROS 工作区或 GO2 仿真已经通过验收。

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Ubuntu 22.04 x86_64 / ROS 2 Humble. Run as a normal user.
+# Ubuntu 22.04 x86_64 / ARM64, ROS 2 Humble. Run as a normal user.
 set -Eeuo pipefail
 trap 'echo "Legbot 依赖安装失败（第 $LINENO 行），可修复后重新执行。" >&2' ERR
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
-JOBS="${LEGBOT_BUILD_JOBS:-2}"
+source "$ROOT/tools/native_platform.sh"
+JOBS="${LEGBOT_BUILD_JOBS:-$LEGBOT_DEFAULT_JOBS}"
 SKIP_APT=false
 SKIP_MODELS=false
 TOMOGRAPHY=false
@@ -15,8 +16,9 @@ usage() {
 --skip-apt         已具备系统/ROS 依赖时，跳过 apt 和 rosdep
 --skip-models      跳过策略下载（已有模型或仅编译时使用）
 --with-tomography  额外安装 Open3D/CuPy 并拉取 PCD；制图运行需 CUDA 12
---jobs N          原生依赖编译线程数，默认 2 或 LEGBOT_BUILD_JOBS
-仅支持 Ubuntu 22.04 x86_64。不要使用 sudo 运行整个脚本。
+--jobs N          编译线程数，ARM64 默认 1，x86_64 默认 2，可用 LEGBOT_BUILD_JOBS 覆盖
+支持 Ubuntu 22.04 x86_64 / ARM64（包括对应系统的 Jetson）；推理依赖使用 CPU 版。
+不要使用 sudo 运行整个脚本。ARM64 不会安装或替换 JetPack/CUDA。
 HELP
 }
 while (($#)); do
@@ -32,8 +34,8 @@ done
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo '--jobs 必须是正整数' >&2; exit 2; }
 [[ $EUID -ne 0 ]] || { echo '请使用普通用户运行，仅系统安装步骤调用 sudo。' >&2; exit 1; }
 source /etc/os-release
-[[ "$ID" == ubuntu && "$VERSION_ID" == 22.04 && "$(uname -m)" == x86_64 ]] || {
-  echo '本分支安装器仅支持 Ubuntu 22.04 x86_64；ARM64 推理库尚未适配。' >&2; exit 1;
+[[ "$ID" == ubuntu && "$VERSION_ID" == 22.04 ]] || {
+  echo '本分支安装器需要 Ubuntu 22.04 / ROS 2 Humble。' >&2; exit 1;
 }
 [[ -z "${ROS_DISTRO:-}" || "$ROS_DISTRO" == humble ]] || {
   echo '请在未加载其他 ROS 发行版的新终端运行。' >&2; exit 1;
@@ -78,14 +80,14 @@ PY
     sudo apt-get install --no-remove -y "$STAGING/ros2-apt-source.deb"
     sudo apt-get update
   fi
-  # Updating these together avoids early Jammy systemd/udev dependency conflicts.
-  sudo apt-get install --no-remove -y systemd udev \
+  sudo apt-get install --no-remove -y \
     build-essential cmake pkg-config git git-lfs curl unzip \
     python3-dev python3-venv python3-pip python3-numpy python3-scipy python3-yaml \
     python3-colcon-common-extensions python3-rosdep pybind11-dev \
     libeigen3-dev libboost-all-dev libpcl-dev libopencv-dev libyaml-cpp-dev libcap-dev libapr1-dev \
     libignition-gazebo6-dev libignition-plugin-dev \
     ros-humble-desktop ros-humble-ros-gz ros-humble-ros2-control ros-humble-ros2-controllers \
+    ros-humble-controller-manager ros-humble-controller-manager-msgs \
     ros-humble-pcl-ros ros-humble-cv-bridge ros-humble-tf2-sensor-msgs \
     ros-humble-backward-ros ros-humble-rmw-fastrtps-cpp ros-humble-gtsam \
     libaprutil1-dev ros-humble-joint-state-publisher ros-humble-joint-state-publisher-gui \
@@ -116,6 +118,7 @@ install_binary() {
   local destination="$ROOT/third_party/$name"
   if [[ -e "$destination" ]]; then
     if [[ -f "$destination/$version_file" && "$(cat "$destination/$version_file")" == "$version" && -f "$destination/lib/$library" ]]; then
+      /usr/bin/python3 "$ROOT/tools/check_native_library.py" "$LEGBOT_ARCH" "$destination/lib/$library"
       echo "$name $version 已存在。"
       return
     fi
@@ -123,20 +126,40 @@ install_binary() {
   fi
   download "$url" "$CACHE/$archive" "$digest"
   mkdir "$STAGING/$name"
-  if [[ "$archive" == *.zip ]]; then
+  if [[ "$archive" == *.whl ]]; then
+    # Keep torch.libs beside torch: wheel libraries use relative ELF RPATHs.
+    unzip -q "$CACHE/$archive" -d "$STAGING/$name"
+    for component in lib include share; do
+      ln -s "torch/$component" "$STAGING/$name/$component"
+    done
+    printf '%s\n' "$version" > "$STAGING/$name/$version_file"
+    mv "$STAGING/$name" "$destination"
+  elif [[ "$archive" == *.zip ]]; then
     unzip -q "$CACHE/$archive" -d "$STAGING/$name"
     mv "$STAGING/$name/libtorch" "$destination"
   else
     tar -xzf "$CACHE/$archive" --strip-components=1 -C "$STAGING/$name"
     mv "$STAGING/$name" "$destination"
   fi
+  /usr/bin/python3 "$ROOT/tools/check_native_library.py" "$LEGBOT_ARCH" "$destination/lib/$library"
 }
+if [[ "$LEGBOT_ARCH" == x86_64 ]]; then
 install_binary libtorch '2.5.1+cpu' build-version \
   'https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip' \
   libtorch-2.5.1-cpu.zip 618ca54eef82a1dca46ff1993d5807d9c0deb0bae147da4974166a147cb562fa libtorch.so
 install_binary onnxruntime 1.23.2 VERSION_NUMBER \
   https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz \
   onnxruntime-1.23.2.tgz 1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b libonnxruntime.so
+else
+  # Official 2.5.1 ARM wheel uses ABI=0; ROS dependencies need C++11 ABI=1.
+  # The 2.6 CPU wheel ships ABI=1 C++ headers/libraries and CMake exports.
+  install_binary libtorch '2.6.0+cpu' build-version \
+    'https://download.pytorch.org/whl/cpu/torch-2.6.0%2Bcpu-cp310-cp310-manylinux_2_28_aarch64.whl' \
+    torch-2.6.0-cpu-cp310-aarch64.whl 90832f4d118c566b8652a2196ac695fc1f14cf420db27b5a1b41c7eaaf2141e9 libtorch.so
+  install_binary onnxruntime 1.23.2 VERSION_NUMBER \
+    https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-aarch64-1.23.2.tgz \
+    onnxruntime-1.23.2-aarch64.tgz 7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c libonnxruntime.so
+fi
 
 build_sdk() {
   local name="$1" lock_key="$2" digest="$3" commit url source_dir
@@ -155,10 +178,10 @@ PY
     touch "$STAGING/$name/.legbot-extracted"
     mv "$STAGING/$name" "$source_dir"
   fi
-  cmake -S "$source_dir" -B "$ROOT/.deps/build/$name" -DCMAKE_BUILD_TYPE=Release \
+  cmake -S "$source_dir" -B "$ROOT/.deps/build/$LEGBOT_ARCH/$name" -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$ROOT/third_party/$name/install"
-  cmake --build "$ROOT/.deps/build/$name" --parallel "$JOBS"
-  cmake --install "$ROOT/.deps/build/$name"
+  cmake --build "$ROOT/.deps/build/$LEGBOT_ARCH/$name" --parallel "$JOBS"
+  cmake --install "$ROOT/.deps/build/$LEGBOT_ARCH/$name"
 }
 build_sdk unitree_sdk2 unitree_sdk2 d9a84be9c5a654aea3d3a707db5776812c0d3b5635e76da356f6d0da3853f7ed
 build_sdk Livox-SDK2 livox_sdk2 2e839e9bce66d83cbbc9dade0158133b7547143fb6b09dd210be91d6e271a9bd
@@ -170,10 +193,10 @@ fi
   echo 'OSQP 源码不是锁定的 v0.6.3，请先检查该目录。' >&2; exit 1;
 }
 git -C "$OSQP" submodule update --init --recursive
-cmake -S "$OSQP" -B "$ROOT/.deps/build/osqp" -DCMAKE_BUILD_TYPE=Release \
+cmake -S "$OSQP" -B "$ROOT/.deps/build/$LEGBOT_ARCH/osqp" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DUNITTESTS=OFF -DCMAKE_INSTALL_PREFIX="$ROOT/third_party/pct/install"
-cmake --build "$ROOT/.deps/build/osqp" --parallel "$JOBS"
-cmake --install "$ROOT/.deps/build/osqp"
+cmake --build "$ROOT/.deps/build/$LEGBOT_ARCH/osqp" --parallel "$JOBS"
+cmake --install "$ROOT/.deps/build/$LEGBOT_ARCH/osqp"
 # ROS apt packages are installed for Ubuntu's Python, even when Conda is active.
 /usr/bin/python3 -m venv --system-site-packages .venv-humble
 .venv-humble/bin/python3 -c 'import numpy, scipy, rclpy'
@@ -186,7 +209,7 @@ if ! $SKIP_MODELS || $TOMOGRAPHY; then
     git lfs install --local --skip-repo
   fi
   patterns=''
-  if ! $SKIP_MODELS; then patterns='*.pt'; fi
+  if ! $SKIP_MODELS; then patterns='*.pt,*.onnx,*.onnx.data'; fi
   if $TOMOGRAPHY; then patterns="${patterns:+$patterns,}*.pcd"; fi
   git lfs pull --include="$patterns" --exclude=''
   python3 - "$SKIP_MODELS" "$TOMOGRAPHY" <<'PY'
@@ -195,6 +218,8 @@ import sys
 files = []
 if sys.argv[1] == 'false':
     files += list(Path('src/go2_description/config').rglob('*.pt'))
+    files += list(Path('src/go2_description/config').rglob('*.onnx'))
+    files += list(Path('src/go2_description/config').rglob('*.onnx.data'))
 if sys.argv[2] == 'true':
     files += list(Path('src/pct_planner/src/pcd').glob('*.pcd'))
 for p in files:

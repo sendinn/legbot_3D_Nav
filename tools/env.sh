@@ -17,6 +17,7 @@ fi
 export LEGBOT_DATA_DIR="$legbot_workspace/data"
 export ONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT:-$legbot_workspace/third_party/onnxruntime}"
 for legbot_library in "$legbot_workspace"/third_party/{onnxruntime,libtorch}/lib \
+  "$legbot_workspace/third_party/libtorch/torch.libs" \
   "$legbot_workspace"/third_party/{pct,Livox-SDK2,unitree_sdk2}/install/lib; do
   if [[ -d "$legbot_library" ]]; then
     export LD_LIBRARY_PATH="$legbot_library:${LD_LIBRARY_PATH:-}"

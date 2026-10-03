@@ -48,7 +48,7 @@ RViz 目标 / 三维关键点路线 / PCT 全局参考 ────────�
 
 | 项目 | 要求 |
 | --- | --- |
-| 操作系统 | Ubuntu 22.04 LTS，当前验证平台为 x86_64 |
+| 操作系统 | Ubuntu 22.04 LTS，安装/构建脚本支持 x86_64 和 ARM64 |
 | ROS | ROS 2 Humble，Fast DDS |
 | 仿真 | Gazebo Fortress |
 | 编译 | GCC、CMake、colcon，C++17 |
@@ -58,7 +58,7 @@ RViz 目标 / 三维关键点路线 / PCT 全局参考 ────────�
 | 推理 | LibTorch（C++11 ABI）、ONNX Runtime 1.23.2 |
 | 硬件 SDK | Unitree SDK2、Livox SDK2/Driver2 |
 
-新机器（Ubuntu 22.04 x86_64）在仓库目录用普通用户执行：
+新机器（Ubuntu 22.04 x86_64 / ARM64）在仓库目录用普通用户执行：
 
 ```bash
 ./install.sh
@@ -69,11 +69,13 @@ source tools/env.sh
 `install.sh` 自动准备 ROS Humble 软件源与 Desktop、Fortress、系统依赖、
 LibTorch/ONNX Runtime、固定版本 SDK、OSQP、Python 环境和 Git LFS 策略文件。
 系统安装步骤会调用 `sudo`，其他依赖保存在工作区内。重复执行会复用下载缓存和编译产物。
-`build.sh` 默认单包 2 线程、各包顺序编译，可用 `./build.sh --jobs 4` 调整，
+`build.sh` 默认单包 x86_64 为 2 线程、ARM64 为 1 线程，各包顺序编译，可用 `./build.sh --jobs 4` 调整，
 也支持 `--packages-select`、`--packages-up-to`。
 
 默认支持已有 tomogram 的 CPU 规划；需要从 PCD 制图时执行
 `./install.sh --with-tomography`，运行制图还需可用的 CUDA 12 驱动/运行环境。
+ARM64 使用官方 Torch 2.6.0 CPU wheel 中的 C++11 ABI 库和 ONNX Runtime 1.23.2 aarch64 包；x86_64 保留 LibTorch 2.5.1。依赖按 SHA-256 校验，构建前检查 ELF 架构。这里的 CPU 推理选择与 Gazebo 的 GPU 渲染独立，不安装 JetPack/CUDA。ARM64 的完整安装、仿真及可选制图仍需在目标环境验证。
+
 详细选项与手动依赖说明见 [Humble 安装说明](docs/HUMBLE_PORT.md)。
 
 SDK 固定版本见 [`docs/SENSOR_SDK_UPSTREAM_LOCK.json`](docs/SENSOR_SDK_UPSTREAM_LOCK.json)，模型来源、输入维度和 SHA-256 见 [`docs/GO2_POLICY_MODELS_LOCK.json`](docs/GO2_POLICY_MODELS_LOCK.json)。
